@@ -1,0 +1,10 @@
+# build and object 
+build/
+obj/
+
+# profiling
+prof/
+gmon.out
+
+# scripts
+*.py
