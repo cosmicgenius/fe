@@ -20,6 +20,16 @@ size_t fast_hash(size_t n) {
 }
 
 /*
+ * Hashed class
+ */
+template<class H>
+bool algebra::HashedClass<H>::operator==(const HashedClass<H>& rhs) const
+    { return this->hash_ == rhs.hash_; }
+
+template<class H>
+H algebra::HashedClass<H>::hash() const { return this->hash_; }
+
+/*
  * NodeStore
  */
 
@@ -131,19 +141,6 @@ algebra::Node<R>::Node(const Idx var, NodeStore<R> &node_store)
 }
 
 template<class R>
-bool algebra::Node<R>::operator==(const Node<R>& rhs) const {
-    if (this->type_ != rhs.type_) return false;
-    switch (this->type_) {
-        case algebra::NodeType::POL: return this->pol_ == rhs.pol_;
-        case algebra::NodeType::VAR: return this->var_ == rhs.var_;
-    }
-    return false;
-}
-
-template<class R>
-algebra::NodeHash algebra::Node<R>::hash() const { return this->hash_; }
-
-template<class R>
 std::string algebra::Node<R>::to_string() const {
     switch (this->type_) {
         case algebra::NodeType::POL: return "f(" + 
@@ -175,9 +172,6 @@ algebra::Mononode<R>::Mononode(const std::vector<NodeHash>&& factors,
         NodeStore<R> &node_store) : factors_(std::move(factors)), node_store_(node_store) {
     calculate_hash();
 }
-
-template<class R>
-algebra::MononodeHash algebra::Mononode<R>::hash() const { return this->hash_; }
 
 template<class R>
 std::string algebra::Mononode<R>::to_string() const {
@@ -223,9 +217,6 @@ algebra::Polynode<R>::Polynode(const std::unordered_map<MononodeHash, R>&& summa
         NodeStore<R> &node_store) : summands_(std::move(summands)), node_store_(node_store) {
     calculate_hash();
 }
-
-template<class R>
-algebra::PolynodeHash algebra::Polynode<R>::hash() const { return this->hash_; }
 
 template<class R>
 std::string algebra::Polynode<R>::to_string() const {
@@ -290,6 +281,8 @@ const algebra::Polynode<R>* algebra::Polynode<R>::operator*(const Polynode<R>& r
     return this->node_store_.insert_polynode(
             Polynode<R>(std::move(combined_summands), this->node_store_));
 }
+
+template class algebra::HashedClass<size_t>;
 
 template class algebra::NodeStore<int>;
 template class algebra::Node<int>;

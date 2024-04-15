@@ -16,6 +16,17 @@ namespace algebra {
 
     // R should be an integral domain
     
+    template<class H>
+    class HashedClass {
+    protected:
+        H hash_;
+
+    public:
+        bool operator==(const HashedClass<H>& rhs) const;
+
+        H hash() const;
+    };
+    
     template<class R>
     class Node;
 
@@ -57,16 +68,14 @@ namespace algebra {
     };
     
     template<class R>
-    class Node {
+    class Node : public HashedClass<NodeHash> {
     private:
         const NodeType type_;
 
         const PolynodeHash pol_;
         const Idx var_;
 
-        NodeHash hash_;
         void calculate_hash();
-
         NodeStore<R> &node_store_;
 
     public:
@@ -76,22 +85,19 @@ namespace algebra {
         Node(const Node& other) = delete;
         Node(Node&& other) = default;
 
-        bool operator==(const Node<R>& rhs) const;
-
-        NodeHash hash() const;
         std::string to_string() const;
     };
 
     // A monomial of nodes
     // (formally, of lesser order)
+    //
+    // Hash should not depend on the order of the elements in factors_
     template <class R>
-    class Mononode {
+    class Mononode : public HashedClass<MononodeHash> {
     private:
         const std::vector<NodeHash> factors_;
 
-        MononodeHash hash_;
         void calculate_hash();
-
         NodeStore<R> &node_store_;
 
     public:
@@ -100,20 +106,17 @@ namespace algebra {
         Mononode(const Mononode& other) = delete;
         Mononode(Mononode&& other) = default;
 
-        MononodeHash hash() const; // should not depend on the order of the elements in factors_
         std::string to_string() const;
                        
         const Mononode<R>* operator*(const Mononode<R>& rhs) const;
     };
 
     template<class R>
-    class Polynode {
+    class Polynode : public HashedClass<PolynodeHash> {
     private:
         const std::unordered_map<MononodeHash, R> summands_;
 
-        PolynodeHash hash_;
         void calculate_hash();
-
         NodeStore<R> &node_store_;
     public:
         Polynode(const std::unordered_map<MononodeHash, R>&& summands, NodeStore<R> &node_store);
@@ -121,7 +124,6 @@ namespace algebra {
         Polynode(const Polynode& other) = delete;
         Polynode(Polynode&& other) = default;
 
-        PolynodeHash hash() const;
         std::string to_string() const;
 
         const Polynode<R>* operator+(const Polynode<R>& rhs) const;

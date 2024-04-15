@@ -48,7 +48,7 @@ void test_algebra() {
     std::cout << z->to_string() << std::endl;
     std::cout << zero->to_string() << std::endl;
 
-    assert(z->hash() == zero->hash());
+    assert(z == zero);
 
     std::cout << "algebra: " << std::fixed << std::setprecision(3)
               << (double)(clock() - tStart) / CLOCKS_PER_SEC << "s"
