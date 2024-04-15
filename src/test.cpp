@@ -24,13 +24,13 @@ void test_algebra() {
 
     assert(*px + *py == x_plus_y);
 
-    const algebra::Polynode<int>* n_x_plus_y = ns.polynode({{ns.mononode({x->hash()})->hash(), -1},
-            {ns.mononode({y->hash()})->hash(), -1}});
+    const algebra::Polynode<int>* n_x_plus_y = -(*x_plus_y);
 
     const algebra::Polynode<int>* z = *n_x_plus_y + *x_plus_y;
     const algebra::Polynode<int>* zero = ns.polynode({});
 
     assert(*z == *zero);
+    assert(*x_plus_y - *px == py);
     assert(z->to_string() == "0");
 
     const algebra::Polynode<int>* fzero = ns.polynode({{

@@ -27,6 +27,10 @@ bool algebra::HashedClass<H>::operator==(const HashedClass<H>& rhs) const
     { return this->hash_ == rhs.hash_; }
 
 template<class H>
+bool algebra::HashedClass<H>::operator!=(const HashedClass<H>& rhs) const
+    { return this->hash_ != rhs.hash_; }
+
+template<class H>
 H algebra::HashedClass<H>::hash() const { return this->hash_; }
 
 /*
@@ -246,6 +250,20 @@ std::string algebra::Polynode<R>::to_string() const {
 }
 
 template<class R>
+const algebra::Polynode<R>* algebra::Polynode<R>::operator-() const {
+    const Polynode<R>* cached = this->node_store_.get_polynode(-this->hash());
+
+    if (cached != nullptr) return cached;
+
+    std::unordered_map<MononodeHash, R> neg_summands(this->summands_);
+    for (const std::pair<MononodeHash, R> neg_entry : neg_summands) {
+        neg_summands[neg_entry.first] = -neg_entry.second;
+    }
+
+    return this->node_store_.insert_polynode(Polynode<R>(std::move(neg_summands), this->node_store_));
+}
+
+template<class R>
 const algebra::Polynode<R>* algebra::Polynode<R>::operator+(const Polynode<R>& rhs) const {
     PolynodeHash sum_hash = this->hash() + rhs.hash();
     const Polynode<R>* cached = this->node_store_.get_polynode(sum_hash);
@@ -266,11 +284,32 @@ const algebra::Polynode<R>* algebra::Polynode<R>::operator+(const Polynode<R>& r
 }
 
 template<class R>
+const algebra::Polynode<R>* algebra::Polynode<R>::operator-(const Polynode<R>& rhs) const {
+    PolynodeHash sum_hash = this->hash() - rhs.hash();
+    const Polynode<R>* cached = this->node_store_.get_polynode(sum_hash);
+
+    if (cached != nullptr) return cached;
+
+    std::unordered_map<MononodeHash, R> combined_summands(this->summands_);
+    for (const std::pair<MononodeHash, R> rhs_entry : rhs.summands_) {
+        combined_summands[rhs_entry.first] -= rhs_entry.second;
+    }
+
+    for (auto it = combined_summands.begin(); it != combined_summands.end();) {
+        if (it->second == 0) it = combined_summands.erase(it);
+        else it++;
+    }
+                
+    return this->node_store_.insert_polynode(Polynode<R>(std::move(combined_summands), this->node_store_));
+}
+
+template<class R>
 const algebra::Polynode<R>* algebra::Polynode<R>::operator*(const Polynode<R>& rhs) const {
     PolynodeHash product_hash = this->hash() * rhs.hash();
     const Polynode<R>* cached = this->node_store_.get_polynode(product_hash);
 
     if (cached != nullptr) return cached;
+
     std::unordered_map<MononodeHash, R> combined_summands;
     for (const std::pair<MononodeHash, R> lhs_entry : this->summands_) {
         for (const std::pair<MononodeHash, R> rhs_entry : rhs.summands_) {

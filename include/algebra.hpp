@@ -23,6 +23,7 @@ namespace algebra {
 
     public:
         bool operator==(const HashedClass<H>& rhs) const;
+        bool operator!=(const HashedClass<H>& rhs) const;
 
         H hash() const;
     };
@@ -130,7 +131,10 @@ namespace algebra {
 
         std::string to_string() const;
 
+        const Polynode<R>* operator-() const;
+
         const Polynode<R>* operator+(const Polynode<R>& rhs) const;
+        const Polynode<R>* operator-(const Polynode<R>& rhs) const;
         const Polynode<R>* operator*(const Polynode<R>& rhs) const;
     };
 }; 
