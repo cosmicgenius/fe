@@ -1,6 +1,7 @@
 #include "../include/algebra.hpp"
 
 #include <cstdint>
+#include <cstdio>
 #include <numeric>
 
 #include <iostream>
@@ -228,7 +229,7 @@ algebra::PolynodeHash algebra::Polynode<R>::hash() const { return this->hash_; }
 
 template<class R>
 std::string algebra::Polynode<R>::to_string() const {
-    if (this->summands_.empty()) return "";
+    if (this->summands_.empty()) return "0";
 
     // Joins strings by +
     // Not pretty 
@@ -258,6 +259,12 @@ const algebra::Polynode<R>* algebra::Polynode<R>::operator+(const Polynode<R>& r
     for (const std::pair<MononodeHash, R> rhs_entry : rhs.summands_) {
         combined_summands[rhs_entry.first] += rhs_entry.second;
     }
+
+    for (auto it = combined_summands.begin(); it != combined_summands.end();) {
+        if (it->second == 0) it = combined_summands.erase(it);
+        else it++;
+    }
+                
     return this->node_store_.insert_polynode(Polynode<R>(std::move(combined_summands), this->node_store_));
 }
 
@@ -274,6 +281,12 @@ const algebra::Polynode<R>* algebra::Polynode<R>::operator*(const Polynode<R>& r
             combined_summands[mono_prod_hash] += lhs_entry.second * rhs_entry.second;
         }
     }
+
+    for (auto it = combined_summands.begin(); it != combined_summands.end();) {
+        if (it->second == 0) it = combined_summands.erase(it);
+        else it++;
+    }
+
     return this->node_store_.insert_polynode(
             Polynode<R>(std::move(combined_summands), this->node_store_));
 }
