@@ -12,11 +12,11 @@
 
 // See https://stackoverflow.com/a/12996028
 size_t fast_hash(size_t n) {
-    uint64_t x = uint64_t(n);
+    uint64_t x = uint64_t(n) ^ 0x93c467e37db0c7a4;
     x = (x ^ (x >> 30)) * (0xbf58476d1ce4e5b9);
     x = (x ^ (x >> 27)) * (0x94d049bb133111eb);
     x = x ^ (x >> 31);
-    return size_t(x);
+    return size_t(x ^ 0x93c467e37db0c7a4);
 }
 
 /*
@@ -61,25 +61,25 @@ const algebra::Polynode<R>* algebra::NodeStore<R>::get_polynode(const PolynodeHa
 }
 
 template<class R>
-const algebra::Node<R>* algebra::NodeStore<R>::new_node(const PolynodeHash pol) {
+const algebra::Node<R>* algebra::NodeStore<R>::node(const PolynodeHash pol) {
     Node<R> node(pol, *this);
     return insert_node(std::move(node));
 }
 
 template<class R>
-const algebra::Node<R>* algebra::NodeStore<R>::new_node(const Idx var) {
+const algebra::Node<R>* algebra::NodeStore<R>::node(const Idx var) {
     Node<R> node(var, *this);
     return insert_node(std::move(node));
 }
 
 template<class R>
-const algebra::Mononode<R>* algebra::NodeStore<R>::new_mononode(const std::vector<NodeHash>&& factors) {
+const algebra::Mononode<R>* algebra::NodeStore<R>::mononode(const std::vector<NodeHash>&& factors) {
     Mononode<R> mononode(std::move(factors), *this);
     return insert_mononode(std::move(mononode));
 }
 
 template<class R>
-const algebra::Polynode<R>* algebra::NodeStore<R>::new_polynode(const std::unordered_map<MononodeHash, R>&& summands) {
+const algebra::Polynode<R>* algebra::NodeStore<R>::polynode(const std::unordered_map<MononodeHash, R>&& summands) {
     Polynode<R> polynode(std::move(summands), *this);
     return insert_polynode(std::move(polynode));
 }
@@ -114,6 +114,18 @@ const algebra::Polynode<R>* algebra::NodeStore<R>::insert_polynode(Polynode<R>&&
         this->polynodes_.insert({ hash, std::move(polynode) });
     return &this->polynodes_.at(hash);
 }
+
+template<class R>
+size_t algebra::NodeStore<R>::get_node_store_size() const 
+    { return this->nodes_.size(); }
+
+template<class R>
+size_t algebra::NodeStore<R>::get_mononode_store_size() const 
+    { return this->mononodes_.size(); }
+
+template<class R>
+size_t algebra::NodeStore<R>::get_polynode_store_size() const 
+    { return this->polynodes_.size(); }
 
 /*
  * Node
@@ -156,14 +168,9 @@ std::string algebra::Node<R>::to_string() const {
 
 template<class R>
 void algebra::Mononode<R>::calculate_hash() {
-    this->hash_ = 0;
+    this->hash_ = 1;
     for (const NodeHash& hash : this->factors_) {
-        // This is probably the best we can get
-        //
-        // The issue is that we want it to be commutative & associative (since * is)
-        // and we want it to not have torsion (since we can have many powers),
-        // so e.g. ^ doesn't work
-        this->hash_ += hash;
+        this->hash_ *= hash;
     }
 }
 
@@ -207,7 +214,6 @@ void algebra::Polynode<R>::calculate_hash() {
     this->hash_ = 0;
     for (const std::pair<MononodeHash, R> entry : this->summands_) {
         // See mononode hash
-        std::cout << entry.first << " " << entry.second << std::endl;
         this->hash_ += entry.first * MononodeHash(entry.second);
     }
 }

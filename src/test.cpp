@@ -11,44 +11,46 @@ void test_algebra() {
     clock_t tStart = clock();
 
     algebra::NodeStore<int> ns;
-    const algebra::Node<int>* x = ns.new_node(1);
-    const algebra::Node<int>* y = ns.new_node(2);
-    const algebra::Mononode<int>* xx = ns.new_mononode(std::vector<algebra::NodeHash>{x->hash()});
-    const algebra::Mononode<int>* yy = ns.new_mononode(std::vector<algebra::NodeHash>{y->hash()});
-    const algebra::Polynode<int>* xy = ns.new_polynode(std::unordered_map<algebra::MononodeHash, int>
-            {{xx->hash(), 1}, {yy->hash(), 1}});
-    const algebra::Polynode<int>* px = ns.new_polynode(std::unordered_map<algebra::MononodeHash, int>
-            {{xx->hash(), 1}});
-    const algebra::Polynode<int>* py = ns.new_polynode(std::unordered_map<algebra::MononodeHash, int>
-            {{yy->hash(), 1}});
+    const algebra::Node<int>* x = ns.node(1);
+    const algebra::Node<int>* y = ns.node(2);
+    const algebra::Node<int>* a = ns.node(3);
+    const algebra::Node<int>* b = ns.node(4);
 
-    const algebra::Polynode<int>* nxy = ns.new_polynode(std::unordered_map<algebra::MononodeHash, int>
-            {{xx->hash(), -1}, {yy->hash(), -1}});
+    const algebra::Polynode<int>* px = ns.polynode({{ns.mononode({x->hash()})->hash(), 1}});
+    const algebra::Polynode<int>* py = ns.polynode({{ns.mononode({y->hash()})->hash(), 1}});
 
-    const algebra::Node<int>* fx = ns.new_node(px->hash());
-    const algebra::Node<int>* fy = ns.new_node(py->hash());
-    const algebra::Node<int>* fxy = ns.new_node(xy->hash());
+    const algebra::Polynode<int>* x_plus_y = ns.polynode({{ns.mononode({x->hash()})->hash(), 1},
+            {ns.mononode({y->hash()})->hash(), 1}});
 
-    const algebra::Polynode<int>* z = *nxy + *xy;
-    const algebra::Polynode<int>* zero = ns.new_polynode(std::unordered_map<algebra::MononodeHash, int>());
+    assert(*px + *py == x_plus_y);
 
-    std::cout << "x: " << x->hash() << std::endl;
-    std::cout << "y: " << y->hash() << std::endl;
-    std::cout << "XX: " << xx->hash() << std::endl;
-    std::cout << "yy: " << yy->hash() << std::endl;
-    std::cout << "xy: " << xy->hash() << std::endl;
-    std::cout << "px: " << px->hash() << std::endl;
-    std::cout << "py: " << py->hash() << std::endl;
+    const algebra::Polynode<int>* n_x_plus_y = ns.polynode({{ns.mononode({x->hash()})->hash(), -1},
+            {ns.mononode({y->hash()})->hash(), -1}});
 
-    std::cout << xy->to_string() << std::endl;
-    std::cout << fx->to_string() << std::endl;
-    std::cout << fy->to_string() << std::endl;
-    std::cout << fxy->to_string() << std::endl;
+    const algebra::Polynode<int>* z = *n_x_plus_y + *x_plus_y;
+    const algebra::Polynode<int>* zero = ns.polynode({});
 
-    std::cout << z->to_string() << std::endl;
-    std::cout << zero->to_string() << std::endl;
+    assert(*z == *zero);
+    assert(z->to_string() == "0");
 
-    assert(z == zero);
+    const algebra::Polynode<int>* fzero = ns.polynode({{
+            ns.mononode({ns.node(zero->hash())->hash()})->hash(), 1
+        }});
+
+    assert(!(*fzero == *zero));
+    assert(fzero->to_string() == "f(0)");
+
+    const algebra::Polynode<int>* a_plus_b = ns.polynode({{ns.mononode({a->hash()})->hash(), 1},
+            {ns.mononode({b->hash()})->hash(), 1}});
+
+    const algebra::Polynode<int>* foil = ns.polynode({
+            {ns.mononode({a->hash(), x->hash()})->hash(), 1}, 
+            {ns.mononode({a->hash(), y->hash()})->hash(), 1}, 
+            {ns.mononode({b->hash(), x->hash()})->hash(), 1}, 
+            {ns.mononode({b->hash(), y->hash()})->hash(), 1},
+        });
+
+    assert(*x_plus_y * *a_plus_b == foil);
 
     std::cout << "algebra: " << std::fixed << std::setprecision(3)
               << (double)(clock() - tStart) / CLOCKS_PER_SEC << "s"

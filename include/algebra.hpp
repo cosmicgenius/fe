@@ -47,16 +47,20 @@ namespace algebra {
         const Mononode<R>* get_mononode(const MononodeHash hash) const;
         const Polynode<R>* get_polynode(const PolynodeHash hash) const;
 
-        const Node<R>* new_node(const PolynodeHash pol);
-        const Node<R>* new_node(const Idx var);
+        const Node<R>* node(const PolynodeHash pol);
+        const Node<R>* node(const Idx var);
 
-        const Mononode<R>* new_mononode(const std::vector<NodeHash>&& factors);
+        const Mononode<R>* mononode(const std::vector<NodeHash>&& factors);
 
-        const Polynode<R>* new_polynode(const std::unordered_map<MononodeHash, R>&& summands);
+        const Polynode<R>* polynode(const std::unordered_map<MononodeHash, R>&& summands);
 
         const Node<R>* insert_node(Node<R>&& node);
         const Mononode<R>* insert_mononode(Mononode<R>&& mononode);
         const Polynode<R>* insert_polynode(Polynode<R>&& polynode);
+
+        size_t get_node_store_size() const;
+        size_t get_mononode_store_size() const;
+        size_t get_polynode_store_size() const;
     };
 
     // Nodes are either:
