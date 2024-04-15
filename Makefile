@@ -9,7 +9,7 @@ test: obj/test.o obj/algebra.o
 obj/test.o: src/test.cpp include/algebra.hpp
 	$(CC) -o obj/test.o -c src/test.cpp $(CFLAGS) $(OPTFLAGS)
 
-obj/algebra.o: include/algebra.hpp
+obj/algebra.o: src/algebra.cpp  include/algebra.hpp
 	$(CC) -o obj/algebra.o -c src/algebra.cpp $(CFLAGS) $(OPTFLAGS)
 
 gen: 

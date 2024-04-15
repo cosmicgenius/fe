@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <numeric>
 
+#include <iostream>
+
 /*
  * Utils
  */ 
@@ -109,9 +111,10 @@ const algebra::Polynode<R>* algebra::NodeStore<R>::insert_polynode(Polynode<R>&&
 template<class R>
 void algebra::Node<R>::calculate_hash() {
     switch (this->type_) {
-        case algebra::NodeType::POL: this->hash_ = fast_hash(this->pol_);
-        case algebra::NodeType::VAR: this->hash_ = fast_hash(this->var_);
+        case algebra::NodeType::POL: this->hash_ = fast_hash(this->pol_); return;
+        case algebra::NodeType::VAR: this->hash_ = fast_hash(this->var_); return;
     }
+    return;
 }
 
 template<class R>
@@ -133,6 +136,7 @@ bool algebra::Node<R>::operator==(const Node<R>& rhs) const {
         case algebra::NodeType::POL: return this->pol_ == rhs.pol_;
         case algebra::NodeType::VAR: return this->var_ == rhs.var_;
     }
+    return false;
 }
 
 template<class R>
@@ -145,6 +149,7 @@ std::string algebra::Node<R>::to_string() const {
             this->node_store_.get_polynode(this->pol_)->to_string() + ")";
         case algebra::NodeType::VAR: return "x" + std::to_string(this->var_);
     }
+    return "";
 }
 
 /*
@@ -207,13 +212,16 @@ void algebra::Polynode<R>::calculate_hash() {
     this->hash_ = 0;
     for (const std::pair<MononodeHash, R> entry : this->summands_) {
         // See mononode hash
-        this->hash_ += entry.first * entry.second;
+        std::cout << entry.first << " " << entry.second << std::endl;
+        this->hash_ += entry.first * MononodeHash(entry.second);
     }
 }
 
 template<class R>
 algebra::Polynode<R>::Polynode(const std::unordered_map<MononodeHash, R>&& summands, 
-        NodeStore<R> &node_store) : summands_(std::move(summands)), node_store_(node_store) {}
+        NodeStore<R> &node_store) : summands_(std::move(summands)), node_store_(node_store) {
+    calculate_hash();
+}
 
 template<class R>
 algebra::PolynodeHash algebra::Polynode<R>::hash() const { return this->hash_; }
@@ -224,13 +232,17 @@ std::string algebra::Polynode<R>::to_string() const {
 
     // Joins strings by +
     // Not pretty 
-    std::string res = std::to_string(this->summands_.begin()->second) + " " + 
+    R coeff = this->summands_.begin()->second;
+    std::string res = (coeff == 1 ? "" : (coeff == -1 ? "-" : std::to_string(coeff) + " ")) +
         this->node_store_.get_mononode(this->summands_.begin()->first)->to_string();
 
 
     for (auto it = ++this->summands_.begin(); it != this->summands_.end(); it++) {
-        res += " + " + std::to_string(it->second) + " " + 
-            this->node_store_.get_mononode(it->first)->to_string();
+        R coeff = it->second;
+        res += (coeff > 0 
+                ? (" + " + (coeff == 1 ? "" : std::to_string(coeff) + " "))
+                : (" - " + (coeff == -1 ? "" : std::to_string(-coeff) + " ")))
+            + this->node_store_.get_mononode(it->first)->to_string();
     }
     return res;
 }
