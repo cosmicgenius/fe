@@ -55,6 +55,9 @@ namespace algebra {
 
         const Polynode<R>* polynode(const std::unordered_map<MononodeHash, R>&& summands);
 
+        const Polynode<R>* zero();
+        const Polynode<R>* one();
+
         const Node<R>* insert_node(Node<R>&& node);
         const Mononode<R>* insert_mononode(Mononode<R>&& mononode);
         const Polynode<R>* insert_polynode(Polynode<R>&& polynode);
@@ -91,6 +94,8 @@ namespace algebra {
         Node(Node&& other) = default;
 
         std::string to_string() const;
+
+        friend class Polynode<R>;
     };
 
     // A monomial of nodes
@@ -114,6 +119,8 @@ namespace algebra {
         std::string to_string() const;
                        
         const Mononode<R>* operator*(const Mononode<R>& rhs) const;
+
+        friend class Polynode<R>;
     };
 
     template<class R>
@@ -136,6 +143,9 @@ namespace algebra {
         const Polynode<R>* operator+(const Polynode<R>& rhs) const;
         const Polynode<R>* operator-(const Polynode<R>& rhs) const;
         const Polynode<R>* operator*(const Polynode<R>& rhs) const;
+
+        // Substitute a variable by a polynode
+        const Polynode<R>* sub(const Idx var, const Polynode<R>& val) const;
     };
 }; 
 

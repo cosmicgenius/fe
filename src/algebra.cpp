@@ -89,6 +89,16 @@ const algebra::Polynode<R>* algebra::NodeStore<R>::polynode(const std::unordered
 }
 
 template<class R>
+const algebra::Polynode<R>* algebra::NodeStore<R>::zero() {
+    return polynode({});
+}
+
+template<class R>
+const algebra::Polynode<R>* algebra::NodeStore<R>::one() {
+    return polynode({{mononode({})->hash(), 1}});
+}
+
+template<class R>
 const algebra::Node<R>* algebra::NodeStore<R>::insert_node(Node<R>&& node) {
     NodeHash hash = node.hash();
 
@@ -265,6 +275,8 @@ const algebra::Polynode<R>* algebra::Polynode<R>::operator-() const {
 
 template<class R>
 const algebra::Polynode<R>* algebra::Polynode<R>::operator+(const Polynode<R>& rhs) const {
+    // Very inexpensive to compute the hash first,
+    // test if it is a repeat, and if not, compute the whole thing
     PolynodeHash sum_hash = this->hash() + rhs.hash();
     const Polynode<R>* cached = this->node_store_.get_polynode(sum_hash);
 
@@ -325,6 +337,45 @@ const algebra::Polynode<R>* algebra::Polynode<R>::operator*(const Polynode<R>& r
 
     return this->node_store_.insert_polynode(
             Polynode<R>(std::move(combined_summands), this->node_store_));
+}
+
+template<class R>
+const algebra::Polynode<R>* algebra::Polynode<R>::sub(const Idx var, const Polynode<R>& val) const {
+    // It is likely not a repeat, so we do not compute the hash first
+    const Polynode<R>* sum = this->node_store_.zero();
+    for (const std::pair<MononodeHash, R> entry : this->summands_) {
+        const Polynode<R>* term = this->node_store_.one();
+        std::vector<NodeHash> non_sub_factors{};
+
+        // Pretty costly, but we'll just multiply everything together for now
+        for (const NodeHash factor : this->node_store_.get_mononode(entry.first)->factors_) { 
+            switch (this->node_store_.get_node(factor)->type_) {
+                // If it is the correct variable, substitute
+                case NodeType::VAR: 
+                    if (this->node_store_.get_node(factor)->var_ == var) {
+                        term = *term * val;
+                    } else {
+                        non_sub_factors.push_back(factor);
+                    }
+                    break;
+                // If it is f(polynode), then we need to recursively substitute inside the entire polynode
+                case NodeType::POL:
+                    non_sub_factors.push_back(this->node_store_.node
+                            (this->node_store_.get_polynode(
+                                this->node_store_.get_node(factor)->pol_
+                            )->sub(var, val)->hash()
+                        )->hash());
+                    break;
+            }
+        }
+        term = *term * 
+                *this->node_store_.polynode(
+                    {{this->node_store_.mononode(std::move(non_sub_factors))->hash(), entry.second}}
+                );
+
+        sum = *sum + *term;
+    }
+    return sum;
 }
 
 template class algebra::HashedClass<size_t>;
