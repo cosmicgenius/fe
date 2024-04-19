@@ -13,8 +13,6 @@ namespace algebra {
     typedef size_t NodeHash;
     typedef size_t MononodeHash;
     typedef size_t PolynodeHash;
-
-    // R should be an integral domain
     
     template<class H>
     class HashedClass {
@@ -27,6 +25,8 @@ namespace algebra {
 
         H hash() const;
     };
+
+    // R should be an integral domain
     
     template<class R>
     class Node;
@@ -146,6 +146,10 @@ namespace algebra {
 
         // Substitute a variable by a polynode
         const Polynode<R>* sub(const Idx var, const Polynode<R>& val) const;
+
+        // Given the equation this = 0, 
+        // apply f to both sides of the equation this + rhs = rhs
+        const Polynode<R>* apply_func(const Polynode<R>& rhs) const;
     };
 }; 
 

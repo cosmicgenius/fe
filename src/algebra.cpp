@@ -358,6 +358,7 @@ const algebra::Polynode<R>* algebra::Polynode<R>::sub(const Idx var, const Polyn
                         non_sub_factors.push_back(factor);
                     }
                     break;
+
                 // If it is f(polynode), then we need to recursively substitute inside the entire polynode
                 case NodeType::POL:
                     non_sub_factors.push_back(this->node_store_.node
@@ -376,6 +377,18 @@ const algebra::Polynode<R>* algebra::Polynode<R>::sub(const Idx var, const Polyn
         sum = *sum + *term;
     }
     return sum;
+}
+
+template<class R>
+const algebra::Polynode<R>* algebra::Polynode<R>::apply_func(const Polynode<R>& rhs) const {
+    return this->node_store_.polynode({
+            {this->node_store_.mononode({ 
+                    this->node_store_.node((*this + rhs)->hash())->hash() 
+                })->hash(), 1},
+            {this->node_store_.mononode({ 
+                    this->node_store_.node(rhs.hash())->hash() 
+                })->hash(), -1}
+        });
 }
 
 template class algebra::HashedClass<size_t>;

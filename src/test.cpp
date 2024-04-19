@@ -93,6 +93,13 @@ void test_algebra() {
 
     assert(*xy_prod->sub(2, *px) == *x_pow);
 
+    const algebra::Polynode<int>* fx_minus_fy = ns.polynode({
+            {ns.mononode({ns.node(px->hash())->hash()})->hash(), 1},
+            {ns.mononode({ns.node(py->hash())->hash()})->hash(), -1}
+        });
+
+    assert(*fx_minus_fy == *(*px - *py)->apply_func(*py));
+
     std::cout << "algebra: " << std::fixed << std::setprecision(3)
               << (double)(clock() - tStart) / CLOCKS_PER_SEC << "s"
               << std::endl;
