@@ -87,9 +87,16 @@ const algebra::Polynode<int>* InputHandler::parse_polynode(const std::string &in
                 throw std::invalid_argument("Failed to parse expression '" + input + "'");
             }
         }
-        summands[this->node_store_.mononode(std::move(factors))->hash()] = coeff;
+        summands[this->node_store_.mononode(std::move(factors))->hash()] += coeff;
         last = next;
     } while (next < len);
+
+    // Remove zeros
+    for (auto it = summands.begin(); it != summands.end();) {
+        if (it->second == 0) it = summands.erase(it);
+        else it++;
+    }
+
     return this->node_store_.polynode(std::move(summands));
 }
 
