@@ -1,4 +1,5 @@
 #include "../include/algebra.hpp"
+#include "../include/input.hpp"
 
 #include <cassert>
 #include <chrono>
@@ -6,6 +7,7 @@
 #include <ctime>
 #include <iostream>
 #include <iomanip>
+#include <string>
 
 void test_algebra() {
     clock_t tStart = clock();
@@ -105,7 +107,54 @@ void test_algebra() {
               << std::endl;
 }
 
+void test_input() {
+    clock_t tStart = clock();
+
+    std::istringstream in(
+        "hyp x1 + f(x2 * x1 + x3) - f(2 x1) * f(x3) * x2\n"
+        "sub h1 x2 0\n"
+        "sub h2 x1 -f(1 * x3)\n"
+        "hyp x1 - x2\n"
+        "sub h4 x2 x3 + x4\n"
+        "app h5 x3 + x4\n"
+        "sub h6 x3 x1 - x4\n"
+        "end");
+
+    std::stringstream out, err;
+
+    InputHandler ih(in, out, err);
+    ih.handle_input();
+
+    std::vector<std::string> outputs;
+    std::string output;
+    while (std::getline(out, output)) outputs.push_back(output);
+
+    std::vector<std::string> errors;
+    std::string error;
+    while (std::getline(err, error)) errors.push_back(error);
+
+    std::set<int> zeros{3, 7};
+    assert(outputs.size() == 8);
+    for (size_t i = 1; i < outputs.size(); i++) {
+        const std::string &s = outputs[i];
+
+        std::string pref = "h";
+        pref += std::to_string(i);
+        
+        size_t split = s.find_first_of(":");
+        assert(s.substr(0, split) == pref);
+        if (zeros.find(i) != zeros.end()) assert(s.substr(split + 2) == "0");
+    }
+
+    assert(errors.size() == 0);
+
+    std::cout << "input: " << std::fixed << std::setprecision(3)
+              << (double)(clock() - tStart) / CLOCKS_PER_SEC << "s"
+              << std::endl;
+}
+
 int main() {
     test_algebra();
+    test_input();
 }
 

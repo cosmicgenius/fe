@@ -5,8 +5,8 @@ OPTFLAGS = -O3
 main: obj/main.o obj/input.o obj/algebra.o
 	$(CC) -o build/main obj/main.o obj/input.o obj/algebra.o $(CFLAGS) $(OPTFLAGS)
 
-test: obj/test.o obj/algebra.o
-	$(CC) -o build/test obj/test.o obj/algebra.o $(CFLAGS) $(OPTFLAGS)
+test: obj/test.o obj/input.o obj/algebra.o
+	$(CC) -o build/test obj/test.o obj/input.o obj/algebra.o $(CFLAGS) $(OPTFLAGS)
 	./build/test
 
 obj/main.o: src/main.cpp include/input.hpp include/algebra.hpp
