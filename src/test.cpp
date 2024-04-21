@@ -81,7 +81,7 @@ void test_algebra() {
 
     assert(binom == xy_prod);
     assert(*py->sub(2, *px) == *px);
-
+    
     const algebra::Polynode<int>* fx = ns.polynode({{ns.mononode({ns.node(px->hash())->hash()})->hash(), 1}});
     const algebra::Polynode<int>* ffoil = ns.polynode({{ns.mononode({ns.node(foil->hash())->hash()})->hash(), 1}});
 

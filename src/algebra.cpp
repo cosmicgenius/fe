@@ -169,9 +169,9 @@ algebra::Node<R>::Node(const Idx var, NodeStore<R> &node_store)
 template<class R>
 std::string algebra::Node<R>::to_string() const {
     switch (this->type_) {
-        case algebra::NodeType::POL: return "f(" + 
-            this->node_store_.get_polynode(this->pol_)->to_string() + ")";
-        case algebra::NodeType::VAR: return "x" + std::to_string(this->var_);
+        case algebra::NodeType::POL: return std::string("f(") + 
+            this->node_store_.get_polynode(this->pol_)->to_string() + std::string(")");
+        case algebra::NodeType::VAR: return std::string("x") + std::to_string(this->var_);
     }
     return "";
 }
@@ -201,7 +201,8 @@ std::string algebra::Mononode<R>::to_string() const {
     // Joins strings by a space
     std::string res = this->node_store_.get_node(this->factors_[0])->to_string();
     for (auto it = this->factors_.begin() + 1; it != this->factors_.end(); it++) {
-        res += " " + this->node_store_.get_node(*it)->to_string();
+        res += " ";
+        res += this->node_store_.get_node(*it)->to_string();
     }
     return res;
 }
