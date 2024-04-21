@@ -12,7 +12,7 @@ void clean(std::string &input) {
     input.erase(std::remove(input.begin(), input.end(), ' '), input.end());
 
     // Remove asterisks (multiplication can be recognized from juxtaposition)
-    input.erase(std::remove(input.begin(), input.end(), ' '), input.end());
+    input.erase(std::remove(input.begin(), input.end(), '*'), input.end());
 
     // To lower
     for (size_t i = 0; i < input.size(); i++) {
