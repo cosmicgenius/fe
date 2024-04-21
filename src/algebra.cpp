@@ -169,9 +169,9 @@ algebra::Node<R>::Node(const Idx var, NodeStore<R> &node_store)
 template<class R>
 std::string algebra::Node<R>::to_string() const {
     switch (this->type_) {
-        case algebra::NodeType::POL: return "f(" + 
-            this->node_store_.get_polynode(this->pol_)->to_string() + ")";
-        case algebra::NodeType::VAR: return "x" + std::to_string(this->var_);
+        case algebra::NodeType::POL: return std::string("f(") + 
+            this->node_store_.get_polynode(this->pol_)->to_string() + std::string(")");
+        case algebra::NodeType::VAR: return std::string("x") + std::to_string(this->var_);
     }
     return "";
 }
@@ -201,7 +201,8 @@ std::string algebra::Mononode<R>::to_string() const {
     // Joins strings by a space
     std::string res = this->node_store_.get_node(this->factors_[0])->to_string();
     for (auto it = this->factors_.begin() + 1; it != this->factors_.end(); it++) {
-        res += " " + this->node_store_.get_node(*it)->to_string();
+        res += " ";
+        res += this->node_store_.get_node(*it)->to_string();
     }
     return res;
 }
@@ -325,8 +326,8 @@ const algebra::Polynode<R>* algebra::Polynode<R>::operator*(const Polynode<R>& r
     std::unordered_map<MononodeHash, R> combined_summands;
     for (const std::pair<MononodeHash, R> lhs_entry : this->summands_) {
         for (const std::pair<MononodeHash, R> rhs_entry : rhs.summands_) {
-            MononodeHash mono_prod_hash = lhs_entry.first * rhs_entry.first;
-            combined_summands[mono_prod_hash] += lhs_entry.second * rhs_entry.second;
+            const Mononode<R>* prod = *this->node_store_.get_mononode(lhs_entry.first) * *this->node_store_.get_mononode(rhs_entry.first);
+            combined_summands[prod->hash()] += lhs_entry.second * rhs_entry.second;
         }
     }
 
