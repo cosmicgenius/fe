@@ -326,8 +326,8 @@ const algebra::Polynode<R>* algebra::Polynode<R>::operator*(const Polynode<R>& r
     std::unordered_map<MononodeHash, R> combined_summands;
     for (const std::pair<MononodeHash, R> lhs_entry : this->summands_) {
         for (const std::pair<MononodeHash, R> rhs_entry : rhs.summands_) {
-            MononodeHash mono_prod_hash = lhs_entry.first * rhs_entry.first;
-            combined_summands[mono_prod_hash] += lhs_entry.second * rhs_entry.second;
+            const Mononode<R>* prod = *this->node_store_.get_mononode(lhs_entry.first) * *this->node_store_.get_mononode(rhs_entry.first);
+            combined_summands[prod->hash()] += lhs_entry.second * rhs_entry.second;
         }
     }
 
