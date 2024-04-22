@@ -9,16 +9,19 @@
 /*
  * Hashed class
  */
-template<class H>
-bool algebra::HashedClass<H>::operator==(const HashedClass<H>& rhs) const
+template<class Hash>
+bool algebra::NodeBase<Hash>::operator==(const NodeBase<Hash>& rhs) const
     { return this->hash_ == rhs.hash_; }
 
-template<class H>
-bool algebra::HashedClass<H>::operator!=(const HashedClass<H>& rhs) const
+template<class Hash>
+bool algebra::NodeBase<Hash>::operator!=(const NodeBase<Hash>& rhs) const
     { return this->hash_ != rhs.hash_; }
 
-template<class H>
-H algebra::HashedClass<H>::hash() const { return this->hash_; }
+template<class Hash>
+Hash algebra::NodeBase<Hash>::hash() const { return this->hash_; }
+
+template<class Hash>
+int algebra::NodeBase<Hash>::weight() const { return this->weight_; }
 
 /*
  * NodeStore
@@ -146,24 +149,35 @@ size_t algebra::NodeStore<R>::get_polynode_store_size() const
  */
 
 template<class R>
-void algebra::Node<R>::calculate_hash() {
+void algebra::Node<R>::init() {
     switch (this->type_) {
-        case algebra::NodeType::POL: this->hash_ = this->node_store_.hash(this->pol_); return;
-        case algebra::NodeType::VAR: this->hash_ = this->node_store_.hash(this->var_); return;
+        case algebra::NodeType::POL: {
+            this->hash_ = this->node_store_.hash(this->pol_); 
+
+            const Polynode<R>* poly = this->node_store_.get_polynode(this->pol_);
+            this->weight_ = poly->weight() * poly->weight();
+            break;
+        }
+        case algebra::NodeType::VAR: {
+            this->hash_ = this->node_store_.hash(this->var_); 
+            this->weight_ = 2;
+            break;
+        }
     }
+
     return;
 }
 
 template<class R>
 algebra::Node<R>::Node(const PolynodeHash pol, NodeStore<R> &node_store) 
     : type_(NodeType::POL), pol_(pol), var_(0), node_store_(node_store) {
-    calculate_hash();
+    init();
 }
 
 template<class R>
 algebra::Node<R>::Node(const Idx var, NodeStore<R> &node_store) 
     : type_(NodeType::VAR), pol_(0), var_(var), node_store_(node_store) {
-    calculate_hash();
+    init();
 }
 
 template<class R>
@@ -181,17 +195,19 @@ std::string algebra::Node<R>::to_string() const {
  */
 
 template<class R>
-void algebra::Mononode<R>::calculate_hash() {
+void algebra::Mononode<R>::init() {
     this->hash_ = 1;
+    this->weight_ = 0;
     for (const NodeHash& hash : this->factors_) {
         this->hash_ *= hash;
+        this->weight_ += this->node_store_.get_node(hash)->weight();
     }
 }
 
 template<class R>
 algebra::Mononode<R>::Mononode(const std::vector<NodeHash>&& factors, 
         NodeStore<R> &node_store) : factors_(std::move(factors)), node_store_(node_store) {
-    calculate_hash();
+    init();
 }
 
 template<class R>
@@ -225,18 +241,20 @@ const algebra::Mononode<R>* algebra::Mononode<R>::operator*(const Mononode<R>& r
  */
 
 template<class R>
-void algebra::Polynode<R>::calculate_hash() {
+void algebra::Polynode<R>::init() {
     this->hash_ = 0;
+    this->weight_ = 0;
     for (const std::pair<MononodeHash, R> entry : this->summands_) {
         // See mononode hash
         this->hash_ += entry.first * MononodeHash(entry.second);
+        this->weight_ += this->node_store_.get_mononode(entry.first)->weight();
     }
 }
 
 template<class R>
 algebra::Polynode<R>::Polynode(const std::unordered_map<MononodeHash, R>&& summands, 
         NodeStore<R> &node_store) : summands_(std::move(summands)), node_store_(node_store) {
-    calculate_hash();
+    init();
 }
 
 template<class R>
@@ -352,22 +370,23 @@ const algebra::Polynode<R>* algebra::Polynode<R>::sub(const Idx var, const Polyn
         for (const NodeHash factor : this->node_store_.get_mononode(entry.first)->factors_) { 
             switch (this->node_store_.get_node(factor)->type_) {
                 // If it is the correct variable, substitute
-                case NodeType::VAR: 
+                case NodeType::VAR: {
                     if (this->node_store_.get_node(factor)->var_ == var) {
                         term = *term * val;
                     } else {
                         non_sub_factors.push_back(factor);
                     }
                     break;
-
+                }
                 // If it is f(polynode), then we need to recursively substitute inside the entire polynode
-                case NodeType::POL:
+                case NodeType::POL: {
                     non_sub_factors.push_back(this->node_store_.node
                             (this->node_store_.get_polynode(
                                 this->node_store_.get_node(factor)->pol_
                             )->sub(var, val)->hash()
                         )->hash());
                     break;
+                }
             }
         }
         term = *term * 
@@ -392,7 +411,7 @@ const algebra::Polynode<R>* algebra::Polynode<R>::apply_func(const Polynode<R>& 
         });
 }
 
-template class algebra::HashedClass<size_t>;
+template class algebra::NodeBase<size_t>;
 
 template class algebra::NodeStore<int>;
 template class algebra::Node<int>;

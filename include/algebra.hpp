@@ -14,16 +14,18 @@ namespace algebra {
     typedef size_t MononodeHash;
     typedef size_t PolynodeHash;
     
-    template<class H>
-    class HashedClass {
+    template<class Hash>
+    class NodeBase {
     protected:
-        H hash_;
+        Hash hash_;
+        int weight_;
 
     public:
-        bool operator==(const HashedClass<H>& rhs) const;
-        bool operator!=(const HashedClass<H>& rhs) const;
+        bool operator==(const NodeBase<Hash>& rhs) const;
+        bool operator!=(const NodeBase<Hash>& rhs) const;
 
-        H hash() const;
+        Hash hash() const;
+        int weight() const;
     };
 
     // R should be an integral domain
@@ -74,22 +76,22 @@ namespace algebra {
     };
 
     // Nodes are either:
-    //  i)  f(P) where P is a polynode
-    //  ii) xi, a variable
+    //  i)  f(P), where P is a polynode
+    //  ii)   xi, a variable
     enum NodeType {
         POL,
         VAR,
     };
     
     template<class R>
-    class Node : public HashedClass<NodeHash> {
+    class Node : public NodeBase<NodeHash> {
     private:
         const NodeType type_;
 
         const PolynodeHash pol_;
         const Idx var_;
 
-        void calculate_hash();
+        void init();
         NodeStore<R> &node_store_;
 
     public:
@@ -109,11 +111,11 @@ namespace algebra {
     //
     // Hash should not depend on the order of the elements in factors_
     template <class R>
-    class Mononode : public HashedClass<MononodeHash> {
+    class Mononode : public NodeBase<MononodeHash> {
     private:
         const std::vector<NodeHash> factors_;
 
-        void calculate_hash();
+        void init();
         NodeStore<R> &node_store_;
 
     public:
@@ -130,11 +132,11 @@ namespace algebra {
     };
 
     template<class R>
-    class Polynode : public HashedClass<PolynodeHash> {
+    class Polynode : public NodeBase<PolynodeHash> {
     private:
         const std::unordered_map<MononodeHash, R> summands_;
 
-        void calculate_hash();
+        void init();
         NodeStore<R> &node_store_;
     public:
         Polynode(const std::unordered_map<MononodeHash, R>&& summands, NodeStore<R> &node_store);
