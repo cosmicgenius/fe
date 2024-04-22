@@ -43,7 +43,13 @@ namespace algebra {
         std::unordered_map<NodeHash, Node<R>> nodes_;
         std::unordered_map<MononodeHash, Mononode<R>> mononodes_;
         std::unordered_map<PolynodeHash, Polynode<R>> polynodes_;
+    
+        size_t conj_;
     public:
+        NodeStore(const size_t seed = 0);
+
+        size_t hash(const size_t n) const;
+
         const Node<R>* get_node(const NodeHash hash) const;
         const Mononode<R>* get_mononode(const MononodeHash hash) const;
         const Polynode<R>* get_polynode(const PolynodeHash hash) const;

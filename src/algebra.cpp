@@ -7,19 +7,6 @@
 #include <iostream>
 
 /*
- * Utils
- */ 
-
-// See https://stackoverflow.com/a/12996028
-size_t fast_hash(size_t n) {
-    uint64_t x = uint64_t(n) ^ 0x93c467e37db0c7a4;
-    x = (x ^ (x >> 30)) * (0xbf58476d1ce4e5b9);
-    x = (x ^ (x >> 27)) * (0x94d049bb133111eb);
-    x = x ^ (x >> 31);
-    return size_t(x ^ 0x93c467e37db0c7a4);
-}
-
-/*
  * Hashed class
  */
 template<class H>
@@ -42,6 +29,19 @@ H algebra::HashedClass<H>::hash() const { return this->hash_; }
 // that's ok (probably not too bad)
 //
 // TODO: Am i using rvalue references right?
+
+template<class R>
+algebra::NodeStore<R>::NodeStore(const size_t seed) : conj_((seed ^ 0xab50cbf18725d1d1) * 0x80be920c700dedc1) {}
+
+// See https://stackoverflow.com/a/12996028
+template<class R>
+size_t algebra::NodeStore<R>::hash(const size_t n) const {
+    uint64_t x = uint64_t(n) ^ this->conj_;
+    x = (x ^ (x >> 30)) * (0xbf58476d1ce4e5b9);
+    x = (x ^ (x >> 27)) * (0x94d049bb133111eb);
+    x = x ^ (x >> 31);
+    return size_t(x ^ this->conj_);
+}
 
 template<class R>
 const algebra::Node<R>* algebra::NodeStore<R>::get_node(const NodeHash hash) const {
@@ -148,8 +148,8 @@ size_t algebra::NodeStore<R>::get_polynode_store_size() const
 template<class R>
 void algebra::Node<R>::calculate_hash() {
     switch (this->type_) {
-        case algebra::NodeType::POL: this->hash_ = fast_hash(this->pol_); return;
-        case algebra::NodeType::VAR: this->hash_ = fast_hash(this->var_); return;
+        case algebra::NodeType::POL: this->hash_ = this->node_store_.hash(this->pol_); return;
+        case algebra::NodeType::VAR: this->hash_ = this->node_store_.hash(this->var_); return;
     }
     return;
 }
