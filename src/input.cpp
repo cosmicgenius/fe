@@ -63,7 +63,7 @@ const algebra::Polynode<int>* InputHandler::parse_polynode(const std::string &in
                 //std::cerr << " Variable: " << last << " " << cur << " " << input.substr(last, cur - last) << std::endl;
 
                 std::string var_str = input.substr(last + 1, cur - last);
-                factors.push_back(this->node_store_.node(std::stoi(var_str))->hash());
+                factors.push_back(this->node_store_.node(std::stoi(var_str))->hash);
             // f(polynode), so we must recurse
             } else if (input[last] == 'f') {
                 cur++;
@@ -81,13 +81,13 @@ const algebra::Polynode<int>* InputHandler::parse_polynode(const std::string &in
                 
                 std::string sub_polynode = input.substr(last + 2, cur - last - 3);
                 factors.push_back(this->node_store_.node(
-                        this->parse_polynode(sub_polynode)->hash()
-                    )->hash());
+                        this->parse_polynode(sub_polynode)->hash
+                    )->hash);
             } else {
                 throw std::invalid_argument("Failed to parse expression '" + input + "'");
             }
         }
-        summands[this->node_store_.mononode(std::move(factors))->hash()] += coeff;
+        summands[this->node_store_.mononode(std::move(factors))->hash] += coeff;
         last = next;
     } while (next < len);
 
@@ -112,7 +112,7 @@ bool InputHandler::eval(std::string &cmd, std::string &rest) {
     switch (cmd_type) {
         case CMD_TYPE::hyp: {
             clean(rest);
-            this->hypotheses_.push_back(this->parse_polynode(rest)->hash());
+            this->hypotheses_.push_back(this->parse_polynode(rest)->hash);
             break;
         }
         case CMD_TYPE::sub: {
@@ -136,7 +136,7 @@ bool InputHandler::eval(std::string &cmd, std::string &rest) {
 
             this->hypotheses_.push_back(this->node_store_.get_polynode(primal)->sub(
                         var, *this->parse_polynode(polynode_str)
-                    )->hash());
+                    )->hash);
             break;
         }
         case CMD_TYPE::app: {
@@ -154,7 +154,7 @@ bool InputHandler::eval(std::string &cmd, std::string &rest) {
 
             this->hypotheses_.push_back(this->node_store_.get_polynode(primal)->apply_func(
                         *this->parse_polynode(polynode_str)
-                    )->hash());
+                    )->hash);
             break;
         }
         case CMD_TYPE::end: return true;

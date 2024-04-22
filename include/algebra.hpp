@@ -16,16 +16,14 @@ namespace algebra {
     
     template<class Hash>
     class NodeBase {
-    protected:
-        Hash hash_;
-        int weight_;
-
     public:
+        const Hash hash;
+        const int weight;
+
+        NodeBase(const Hash hash, const int weight);
+
         bool operator==(const NodeBase<Hash>& rhs) const;
         bool operator!=(const NodeBase<Hash>& rhs) const;
-
-        Hash hash() const;
-        int weight() const;
     };
 
     // R should be an integral domain
@@ -91,7 +89,6 @@ namespace algebra {
         const PolynodeHash pol_;
         const Idx var_;
 
-        void init();
         NodeStore<R> &node_store_;
 
     public:
@@ -115,7 +112,6 @@ namespace algebra {
     private:
         const std::vector<NodeHash> factors_;
 
-        void init();
         NodeStore<R> &node_store_;
 
     public:
@@ -136,7 +132,6 @@ namespace algebra {
     private:
         const std::unordered_map<MononodeHash, R> summands_;
 
-        void init();
         NodeStore<R> &node_store_;
     public:
         Polynode(const std::unordered_map<MononodeHash, R>&& summands, NodeStore<R> &node_store);
