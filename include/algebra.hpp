@@ -3,10 +3,12 @@
 #define ALGEBRA_HPP_
 
 #include <cstddef>
+#include <functional>
+#include <map>
 #include <set>
+#include <string>
 #include <unordered_map>
 #include <vector>
-#include <string>
 
 namespace algebra {
     typedef int Idx;
@@ -45,6 +47,8 @@ namespace algebra {
         std::unordered_map<PolynodeHash, Polynode<R>> polynodes_;
     
         size_t conj_;
+
+        void dump() const;
     public:
         NodeStore(const size_t seed = 0);
 
@@ -57,9 +61,9 @@ namespace algebra {
         const Node<R>* node(const PolynodeHash pol);
         const Node<R>* node(const Idx var);
 
-        const Mononode<R>* mononode(const std::vector<NodeHash>&& factors);
+        const Mononode<R>* mononode(const std::unordered_map<NodeHash, int>& factors);
 
-        const Polynode<R>* polynode(const std::unordered_map<MononodeHash, R>&& summands);
+        const Polynode<R>* polynode(const std::vector<std::pair<MononodeHash, R>>& summands);
 
         const Polynode<R>* zero();
         const Polynode<R>* one();
@@ -67,6 +71,9 @@ namespace algebra {
         const Node<R>* insert_node(Node<R>&& node);
         const Mononode<R>* insert_mononode(Mononode<R>&& mononode);
         const Polynode<R>* insert_polynode(Polynode<R>&& polynode);
+
+        int node_cmp(const NodeHash lhs, const NodeHash rhs) const;
+        int mononode_cmp(const MononodeHash lhs, const MononodeHash rhs) const;
 
         size_t get_node_store_size() const;
         size_t get_mononode_store_size() const;
@@ -101,21 +108,28 @@ namespace algebra {
         std::string to_string() const;
 
         friend class Polynode<R>;
+        friend class NodeStore<R>;
     };
 
     // A monomial of nodes
     // (formally, of lesser order)
-    //
-    // Hash should not depend on the order of the elements in factors_
     template <class R>
     class Mononode : public NodeBase<MononodeHash> {
     private:
-        const std::vector<NodeHash> factors_;
+        const std::map<NodeHash, int, std::function<bool(const NodeHash, const NodeHash)>> factors_;
+        const int degree;
 
         NodeStore<R> &node_store_;
 
+        static std::map<NodeHash, int, std::function<bool(const NodeHash, const NodeHash)>> clean_factors(
+                const std::unordered_map<NodeHash, int> &factors, NodeStore<R> &node_store);
+
+        // Private constructor with move assumes correct sorting in map
+        Mononode(const std::map<NodeHash, int, std::function<bool(const NodeHash, const NodeHash)>>&& factors, 
+                NodeStore<R> &node_store);
+
     public:
-        Mononode(const std::vector<NodeHash>&& factors, NodeStore<R> &node_store);
+        Mononode(const std::unordered_map<NodeHash, int>& factors, NodeStore<R> &node_store);
 
         Mononode(const Mononode& other) = delete;
         Mononode(Mononode&& other) = default;
@@ -125,16 +139,23 @@ namespace algebra {
         const Mononode<R>* operator*(const Mononode<R>& rhs) const;
 
         friend class Polynode<R>;
+        friend class NodeStore<R>;
     };
 
     template<class R>
     class Polynode : public NodeBase<PolynodeHash> {
     private:
-        const std::unordered_map<MononodeHash, R> summands_;
+        const std::vector<std::pair<MononodeHash, R>> summands_;
 
         NodeStore<R> &node_store_;
+
+        static std::vector<std::pair<MononodeHash, R>> clean_summands(
+                const std::vector<std::pair<MononodeHash, R>> &summands, NodeStore<R> &node_store);
+
+        // Private constructor with move assumes already sorted "keys"
+        Polynode(const std::vector<std::pair<MononodeHash, R>>&& summands, NodeStore<R> &node_store);
     public:
-        Polynode(const std::unordered_map<MononodeHash, R>&& summands, NodeStore<R> &node_store);
+        Polynode(const std::vector<std::pair<MononodeHash, R>>& summands, NodeStore<R> &node_store);
 
         Polynode(const Polynode& other) = delete;
         Polynode(Polynode&& other) = default;

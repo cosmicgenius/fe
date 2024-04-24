@@ -50,7 +50,7 @@ const algebra::Polynode<int>* InputHandler::parse_polynode(const std::string &in
         else if (coeff_str == "-") coeff = -1;
         else coeff = std::stoi(coeff_str);
 
-        std::vector<algebra::NodeHash> factors;
+        std::unordered_map<algebra::NodeHash, int> factors;
 
         // Next, tokenize the factors
         while (cur < next) {
@@ -63,7 +63,7 @@ const algebra::Polynode<int>* InputHandler::parse_polynode(const std::string &in
                 //std::cerr << " Variable: " << last << " " << cur << " " << input.substr(last, cur - last) << std::endl;
 
                 std::string var_str = input.substr(last + 1, cur - last);
-                factors.push_back(this->node_store_.node(std::stoi(var_str))->hash);
+                factors[this->node_store_.node(std::stoi(var_str))->hash]++;
             // f(polynode), so we must recurse
             } else if (input[last] == 'f') {
                 cur++;
@@ -80,24 +80,25 @@ const algebra::Polynode<int>* InputHandler::parse_polynode(const std::string &in
                 //std::cerr << " Function: " << last << " " << cur << " " << input.substr(last, cur - last) << std::endl;
                 
                 std::string sub_polynode = input.substr(last + 2, cur - last - 3);
-                factors.push_back(this->node_store_.node(
+                factors[this->node_store_.node(
                         this->parse_polynode(sub_polynode)->hash
-                    )->hash);
+                    )->hash]++;
             } else {
                 throw std::invalid_argument("Failed to parse expression '" + input + "'");
             }
         }
-        summands[this->node_store_.mononode(std::move(factors))->hash] += coeff;
+        summands[this->node_store_.mononode(factors)->hash] += coeff;
         last = next;
     } while (next < len);
 
+    std::vector<std::pair<algebra::MononodeHash, int>> summands_vec;
+    summands_vec.reserve(summands.size());
     // Remove zeros
-    for (auto it = summands.begin(); it != summands.end();) {
-        if (it->second == 0) it = summands.erase(it);
-        else it++;
+    for (auto it = summands.begin(); it != summands.end(); it++) {
+        if (it->second != 0) summands_vec.emplace_back(std::move(*it));
     }
 
-    return this->node_store_.polynode(std::move(summands));
+    return this->node_store_.polynode(summands_vec);
 }
 
 // Return true if end
