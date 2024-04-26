@@ -288,7 +288,7 @@ algebra::Mononode<R>::Mononode(
     NodeBase(
          std::accumulate(factors.begin(), factors.end(), MononodeHash(1),
             [](MononodeHash hash, const std::pair<NodeHash, int>& cur) { 
-                    return hash * pow(cur.first, cur.second);
+                    return hash + cur.first * NodeHash(cur.second);
             }), 
          std::accumulate(factors.begin(), factors.end(), 0, 
             [&node_store](int weight, const std::pair<NodeHash, int>& cur) { 
@@ -310,7 +310,7 @@ algebra::Mononode<R>::Mononode(const std::unordered_map<NodeHash, int>& factors,
     NodeBase(
          std::accumulate(factors.begin(), factors.end(), MononodeHash(1),
             [](MononodeHash hash, const std::pair<NodeHash, int>& cur) { 
-                    return hash * pow(cur.first, cur.second);
+                    return hash + cur.first * NodeHash(cur.second);
                 }), 
          std::accumulate(factors.begin(), factors.end(), 0, 
             [&node_store](int weight, const std::pair<NodeHash, int>& cur) { 
@@ -343,6 +343,8 @@ std::string algebra::Mononode<R>::to_string() const {
 
 template<class R>
 const algebra::Mononode<R>* algebra::Mononode<R>::operator*(const Mononode<R>& rhs) const {
+    // Very inexpensive to compute the hash first,
+    // test if it is a repeat, and if not, compute the whole thing
     MononodeHash product_hash = this->hash * rhs.hash;
     const Mononode<R>* cached = this->node_store_.get_mononode(product_hash);
 
@@ -388,8 +390,8 @@ template<class R>
 algebra::Polynode<R>::Polynode(const std::vector<std::pair<MononodeHash, R>>&& summands, 
         NodeStore<R> &node_store) : 
     NodeBase(std::accumulate(summands.begin(), summands.end(), PolynodeHash(0), 
-                [] (const PolynodeHash hash, const std::pair<MononodeHash, R>& cur) { 
-                    return hash + PolynodeHash(cur.first) * PolynodeHash(cur.second);
+                [&node_store] (const PolynodeHash hash, const std::pair<MononodeHash, R>& cur) { 
+                    return hash ^ node_store.hash(PolynodeHash(cur.first) + PolynodeHash(cur.second));
                 }), 
              std::accumulate(summands.begin(), summands.end(), 0, 
                 [&node_store] (const PolynodeHash weight, const std::pair<MononodeHash, R>& cur) { 
@@ -403,8 +405,8 @@ template<class R>
 algebra::Polynode<R>::Polynode(const std::vector<std::pair<MononodeHash, R>>& summands, 
         NodeStore<R> &node_store) : 
     NodeBase(std::accumulate(summands.begin(), summands.end(), PolynodeHash(0), 
-                [] (const PolynodeHash hash, const std::pair<MononodeHash, R>& cur) { 
-                    return hash + PolynodeHash(cur.first) * PolynodeHash(cur.second);
+                [&node_store] (const PolynodeHash hash, const std::pair<MononodeHash, R>& cur) { 
+                    return hash ^ node_store.hash(PolynodeHash(cur.first) + PolynodeHash(cur.second));
                 }), 
              std::accumulate(summands.begin(), summands.end(), 0, 
                 [&node_store] (const PolynodeHash weight, const std::pair<MononodeHash, R>& cur) { 
@@ -451,13 +453,6 @@ const algebra::Polynode<R>* algebra::Polynode<R>::operator-() const {
 
 template<class R>
 const algebra::Polynode<R>* algebra::Polynode<R>::operator+(const Polynode<R>& rhs) const {
-    // Very inexpensive to compute the hash first,
-    // test if it is a repeat, and if not, compute the whole thing
-    PolynodeHash sum_hash = this->hash + rhs.hash;
-    const Polynode<R>* cached = this->node_store_.get_polynode(sum_hash);
-
-    if (cached != nullptr) return cached;
-
     std::vector<std::pair<MononodeHash, R>> combined_summands;
     combined_summands.reserve(this->summands_.size() + rhs.summands_.size());
 
@@ -499,11 +494,6 @@ const algebra::Polynode<R>* algebra::Polynode<R>::operator-(const Polynode<R>& r
 // Expensive function, but this won't be called too often
 template<class R>
 const algebra::Polynode<R>* algebra::Polynode<R>::operator*(const Polynode<R>& rhs) const {
-    PolynodeHash product_hash = this->hash * rhs.hash;
-    const Polynode<R>* cached = this->node_store_.get_polynode(product_hash);
-
-    if (cached != nullptr) return cached;
-
     // The idea is that once we generate the cartesian product, we must
     //  1) combine like monomials
     //  2) sort monomials
