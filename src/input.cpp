@@ -20,11 +20,25 @@ void clean(std::string &input) {
     }
 }
 
+template<class R>
+R parse_coeff(const std::string &input) {
+    return std::stoi(input);
+}
+
+template<>
+mpq_class parse_coeff(const std::string &input) {
+    if (!input.empty() && input[0] == '+') {
+        return mpq_class(input.substr(1));
+    }
+    return mpq_class(input);
+}
+
 // Input must be cleaned to work
-const algebra::Polynode<int>* InputHandler::parse_polynode(const std::string &input) {
+template<class R>
+const algebra::Polynode<R>* InputHandler<R>::parse_polynode(const std::string &input) {
     //std::cerr << input << std::endl;
     size_t len = input.size();
-    std::unordered_map<algebra::MononodeHash, int> summands;
+    std::unordered_map<algebra::MononodeHash, R> summands;
 
     size_t last = 0, next = 0;
     int nested = 0;
@@ -40,7 +54,7 @@ const algebra::Polynode<int>* InputHandler::parse_polynode(const std::string &in
         // [last, next) is a summand
 
         // First thing is the coefficient
-        int coeff = 1;
+        R coeff = 1;
 
         size_t cur = last;
         for (; cur < next && input[cur] != 'x' && input[cur] != 'f'; cur++);
@@ -48,7 +62,7 @@ const algebra::Polynode<int>* InputHandler::parse_polynode(const std::string &in
         std::string coeff_str = input.substr(last, cur - last);
         if (coeff_str == "" || coeff_str == "+") coeff = 1;
         else if (coeff_str == "-") coeff = -1;
-        else coeff = std::stoi(coeff_str);
+        else coeff = parse_coeff<R>(coeff_str);
 
         std::unordered_map<algebra::NodeHash, int> factors;
 
@@ -71,10 +85,10 @@ const algebra::Polynode<int>* InputHandler::parse_polynode(const std::string &in
                     throw std::invalid_argument("Failed to parse expression '" + input + "'");
                 }
 
-                int nested = 1;
-                for (; cur < next && nested > 0; cur++) {
-                    if (input[cur] == '(') nested++;
-                    else if (input[cur] == ')') nested--;
+                int inner_nested = 1;
+                for (; cur < next && inner_nested > 0; cur++) {
+                    if (input[cur] == '(') inner_nested++;
+                    else if (input[cur] == ')') inner_nested--;
                 }
 
                 //std::cerr << " Function: " << last << " " << cur << " " << input.substr(last, cur - last) << std::endl;
@@ -91,7 +105,7 @@ const algebra::Polynode<int>* InputHandler::parse_polynode(const std::string &in
         last = next;
     } while (next < len);
 
-    std::vector<std::pair<algebra::MononodeHash, int>> summands_vec;
+    std::vector<std::pair<algebra::MononodeHash, R>> summands_vec;
     summands_vec.reserve(summands.size());
     // Remove zeros
     for (auto it = summands.begin(); it != summands.end(); it++) {
@@ -102,7 +116,8 @@ const algebra::Polynode<int>* InputHandler::parse_polynode(const std::string &in
 }
 
 // Return true if end
-bool InputHandler::eval(std::string &cmd, std::string &rest) {
+template<class R>
+bool InputHandler<R>::eval(std::string &cmd, std::string &rest) {
     CMD_TYPE cmd_type;
     if (cmd == "hyp") cmd_type = CMD_TYPE::hyp;
     else if (cmd == "sub") cmd_type = CMD_TYPE::sub;
@@ -165,7 +180,8 @@ bool InputHandler::eval(std::string &cmd, std::string &rest) {
 }
 
 // Return true if end
-bool InputHandler::handle_line(const std::string &input, int& line) {
+template<class R>
+bool InputHandler<R>::handle_line(const std::string &input, int& line) {
     size_t split = input.find(" ");
 
     std::string cmd = input.substr(0, split);
@@ -181,12 +197,14 @@ bool InputHandler::handle_line(const std::string &input, int& line) {
     return false;
 }
 
-InputHandler::InputHandler(std::istream &in, std::ostream &out, std::ostream &err) :
+template<class R>
+InputHandler<R>::InputHandler(std::istream &in, std::ostream &out, std::ostream &err) :
     in_(in), out_(out), err_(err) {
-    this->node_store_ = algebra::NodeStore<int>();
+    this->node_store_ = algebra::NodeStore<R>();
 }
 
-void InputHandler::handle_input() {
+template<class R>
+void InputHandler<R>::handle_input() {
     std::string input;
     int idx = 1;
     do {

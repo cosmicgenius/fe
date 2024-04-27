@@ -1,5 +1,7 @@
 #include "algebra.hpp"
 
+#include <gmpxx.h>
+
 enum CMD_TYPE {
     hyp, // Add a hypothesis
     sub, // Substitute into a hypothesis
@@ -7,16 +9,17 @@ enum CMD_TYPE {
     end,
 };
 
+template<class R>
 class InputHandler {
 private:
     std::istream &in_;
     std::ostream &out_;
     std::ostream &err_;
 
-    algebra::NodeStore<int> node_store_;
+    algebra::NodeStore<R> node_store_;
     std::vector<algebra::PolynodeHash> hypotheses_;
 
-    const algebra::Polynode<int>* parse_polynode(const std::string &input);
+    const algebra::Polynode<R>* parse_polynode(const std::string &input);
 
     // Return true if end
     bool eval(std::string &cmd, std::string &rest);
@@ -27,3 +30,6 @@ public:
     InputHandler(std::istream &in, std::ostream &out, std::ostream &err);
     void handle_input();
 };
+
+template class InputHandler<int>;
+template class InputHandler<mpq_class>;

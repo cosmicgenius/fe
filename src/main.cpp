@@ -3,8 +3,10 @@
 #include <iostream>
 #include <string>
 
+typedef mpq_class R;
+
 int main() {
-    InputHandler ih(std::cin, std::cout, std::cerr);
+    InputHandler<R> ih(std::cin, std::cout, std::cerr);
     ih.handle_input();
 }
 
