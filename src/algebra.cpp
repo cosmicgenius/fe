@@ -7,6 +7,8 @@
 #include <numeric>
 #include <map>
 
+#include <gmpxx.h>
+
 
 /*
  * Util
@@ -25,6 +27,15 @@ T pow(T n, int e) {
         e >>= 1;
     }
     return res;
+}
+
+// See https://stackoverflow.com/a/12996028
+uint64_t fast_hash(uint64_t conj, uint64_t n) {
+    uint64_t x = n ^ conj;
+    x = (x ^ (x >> 30)) * (0xbf58476d1ce4e5b9);
+    x = (x ^ (x >> 27)) * (0x94d049bb133111eb);
+    x = x ^ (x >> 31);
+    return x ^ conj;
 }
 
 /*
@@ -56,14 +67,9 @@ bool algebra::NodeBase<Hash>::operator!=(const NodeBase<Hash>& rhs) const
 template<class R>
 algebra::NodeStore<R>::NodeStore(const size_t seed) : conj_((seed ^ 0xab50cbf18725d1d1) * 0x80be920c700dedc1) {}
 
-// See https://stackoverflow.com/a/12996028
 template<class R>
 size_t algebra::NodeStore<R>::hash(const size_t n) const {
-    uint64_t x = uint64_t(n) ^ this->conj_;
-    x = (x ^ (x >> 30)) * (0xbf58476d1ce4e5b9);
-    x = (x ^ (x >> 27)) * (0x94d049bb133111eb);
-    x = x ^ (x >> 31);
-    return size_t(x ^ this->conj_);
+    return fast_hash(this->conj_, n);
 }
 
 template<class R>
@@ -368,6 +374,29 @@ const algebra::Mononode<R>* algebra::Mononode<R>::operator*(const Mononode<R>& r
  */
 
 template<class R>
+algebra::PolynodeHash to_polynode_hash(const R &r) {
+    return algebra::PolynodeHash(r);
+}
+
+template<>
+algebra::PolynodeHash to_polynode_hash(const mpq_class &r) {
+    // Quick and dirty rational hash
+    double d = r.get_d();
+    uint64_t* ptr = (uint64_t*) &d;
+    return fast_hash(0x93c467e37db0c7a4, *ptr);
+}
+
+template<class R>
+std::string R_to_string(const R &r) {
+    return std::to_string(r);
+}
+
+template<>
+std::string R_to_string(const mpq_class &r) {
+    return r.get_str();
+}
+
+template<class R>
 std::vector<std::pair<algebra::MononodeHash, R>> algebra::Polynode<R>::clean_summands(
         const std::vector<std::pair<MononodeHash, R>> &summands, NodeStore<R> &node_store) {
 
@@ -391,7 +420,7 @@ algebra::Polynode<R>::Polynode(const std::vector<std::pair<MononodeHash, R>>&& s
         NodeStore<R> &node_store) : 
     NodeBase(std::accumulate(summands.begin(), summands.end(), PolynodeHash(0), 
                 [&node_store] (const PolynodeHash hash, const std::pair<MononodeHash, R>& cur) { 
-                    return hash ^ node_store.hash(PolynodeHash(cur.first) + PolynodeHash(cur.second));
+                    return hash ^ node_store.hash(PolynodeHash(cur.first) + to_polynode_hash(cur.second));
                 }), 
              std::accumulate(summands.begin(), summands.end(), 0, 
                 [&node_store] (const PolynodeHash weight, const std::pair<MononodeHash, R>& cur) { 
@@ -406,7 +435,7 @@ algebra::Polynode<R>::Polynode(const std::vector<std::pair<MononodeHash, R>>& su
         NodeStore<R> &node_store) : 
     NodeBase(std::accumulate(summands.begin(), summands.end(), PolynodeHash(0), 
                 [&node_store] (const PolynodeHash hash, const std::pair<MononodeHash, R>& cur) { 
-                    return hash ^ node_store.hash(PolynodeHash(cur.first) + PolynodeHash(cur.second));
+                    return hash ^ node_store.hash(PolynodeHash(cur.first) + to_polynode_hash(cur.second));
                 }), 
              std::accumulate(summands.begin(), summands.end(), 0, 
                 [&node_store] (const PolynodeHash weight, const std::pair<MononodeHash, R>& cur) { 
@@ -423,15 +452,15 @@ std::string algebra::Polynode<R>::to_string() const {
     // Joins strings by +
     // Not pretty 
     R coeff = this->summands_.begin()->second;
-    std::string res = (coeff == 1 ? "" : (coeff == -1 ? "-" : std::to_string(coeff) + " ")) +
+    std::string res = (coeff == 1 ? "" : (coeff == -1 ? "-" : R_to_string(coeff) + " ")) +
         this->node_store_.get_mononode(this->summands_.begin()->first)->to_string();
 
 
     for (auto it = ++this->summands_.begin(); it != this->summands_.end(); it++) {
         R coeff = it->second;
         res += (coeff > 0 
-                ? (" + " + (coeff == 1 ? "" : std::to_string(coeff) + " "))
-                : (" - " + (coeff == -1 ? "" : std::to_string(-coeff) + " ")))
+                ? (" + " + (coeff == 1 ? "" : R_to_string(coeff) + " "))
+                : (" - " + (coeff == -1 ? "" : "-" + R_to_string(coeff) + " ")))
             + this->node_store_.get_mononode(it->first)->to_string();
     }
     return res;
@@ -583,3 +612,8 @@ template class algebra::NodeStore<int>;
 template class algebra::Node<int>;
 template class algebra::Mononode<int>;
 template class algebra::Polynode<int>;
+
+template class algebra::NodeStore<mpq_class>;
+template class algebra::Node<mpq_class>;
+template class algebra::Mononode<mpq_class>;
+template class algebra::Polynode<mpq_class>;
