@@ -128,7 +128,17 @@ bool InputHandler<R>::eval(std::string &cmd, std::string &rest) {
     switch (cmd_type) {
         case CMD_TYPE::hyp: {
             clean(rest);
-            this->hypotheses_.push_back(this->parse_polynode(rest)->hash);
+            size_t split = rest.find_first_of('=');
+
+            if (split == std::string::npos) {
+                // No equal is implicitly rest = 0
+                this->hypotheses_.push_back(this->parse_polynode(rest)->hash);
+            } else {
+                const algebra::Polynode<R> *lhs = this->parse_polynode(rest.substr(0, split)),
+                                           *rhs = this->parse_polynode(rest.substr(split + 1));
+                this->hypotheses_.push_back((*lhs - *rhs)->hash);
+            }
+
             break;
         }
         case CMD_TYPE::sub: {

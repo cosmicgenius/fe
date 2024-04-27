@@ -458,9 +458,10 @@ std::string algebra::Polynode<R>::to_string() const {
 
     for (auto it = ++this->summands_.begin(); it != this->summands_.end(); it++) {
         R coeff = it->second;
+        R a_coeff = abs(coeff);
         res += (coeff > 0 
-                ? (" + " + (coeff == 1 ? "" : R_to_string(coeff) + " "))
-                : (" - " + (coeff == -1 ? "" : "-" + R_to_string(coeff) + " ")))
+                ? (" + " + (coeff == 1 ? "" : R_to_string(a_coeff) + " "))
+                : (" - " + (coeff == -1 ? "" : R_to_string(a_coeff) + " ")))
             + this->node_store_.get_mononode(it->first)->to_string();
     }
     return res;
