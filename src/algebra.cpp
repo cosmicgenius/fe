@@ -504,10 +504,17 @@ std::string algebra::Polynode<R>::to_string() const {
     for (auto it = ++this->summands_.begin(); it != this->summands_.end(); it++) {
         R coeff = it->second;
         R a_coeff = abs(coeff);
-        res += (coeff > 0 
-                ? (" + " + (coeff == 1 ? "" : R_to_string(a_coeff) + " "))
-                : (" - " + (coeff == -1 ? "" : R_to_string(a_coeff) + " ")))
-            + this->node_store_.get_mononode(it->first)->to_string();
+
+        const Mononode<R>* mono = this->node_store_.get_mononode(it->first);
+        
+        if (*mono == *this->node_store_.one_m()) {
+            res += ((coeff > 0 ? " + " : " - ") + R_to_string(a_coeff) + " ");
+        } else {
+            res += (coeff > 0 
+                    ? (" + " + (coeff == 1 ? "" : R_to_string(a_coeff) + " "))
+                    : (" - " + (coeff == -1 ? "" : R_to_string(a_coeff) + " ")))
+                + mono->to_string(); 
+        }
     }
     return res;
 }
