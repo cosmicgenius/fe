@@ -9,95 +9,94 @@
 #include <iomanip>
 #include <string>
 
+#include <gmpxx.h>
+
+typedef mpq_class R;
+
 void test_algebra() {
     clock_t tStart = clock();
 
-    algebra::NodeStore<int> ns;
-    const algebra::Node<int>* x = ns.node(1);
-    const algebra::Node<int>* y = ns.node(2);
-    const algebra::Node<int>* a = ns.node(3);
-    const algebra::Node<int>* b = ns.node(4);
+    algebra::NodeStore<R> ns;
+    const algebra::Node<R>* x = ns.node(1);
+    const algebra::Node<R>* y = ns.node(2);
+    const algebra::Node<R>* a = ns.node(3);
+    const algebra::Node<R>* b = ns.node(4);
 
-    const algebra::Polynode<int>* px = ns.polynode({{ns.mononode({x->hash()})->hash(), 1}});
-    const algebra::Polynode<int>* py = ns.polynode({{ns.mononode({y->hash()})->hash(), 1}});
+    const algebra::Polynode<R>* px = ns.polynode({{ns.mononode({{x->hash, 1}})->hash, 1}});
+    const algebra::Polynode<R>* py = ns.polynode({{ns.mononode({{y->hash, 1}})->hash, 1}});
 
-    const algebra::Polynode<int>* x_plus_y = ns.polynode({{ns.mononode({x->hash()})->hash(), 1},
-            {ns.mononode({y->hash()})->hash(), 1}});
+    const algebra::Polynode<R>* x_plus_y = ns.polynode({
+            {ns.mononode({{x->hash, 1}})->hash, 1},
+            {ns.mononode({{y->hash, 1}})->hash, 1}
+        });
 
     assert(*px + *py == x_plus_y);
 
-    const algebra::Polynode<int>* n_x_plus_y = -(*x_plus_y);
+    const algebra::Polynode<R>* n_x_plus_y = -(*x_plus_y);
 
-    const algebra::Polynode<int>* z = *n_x_plus_y + *x_plus_y;
+    const algebra::Polynode<R>* z = *n_x_plus_y + *x_plus_y;
 
-    assert(*z == *ns.zero());
+    assert(*z == *ns.zero_p());
     assert(*x_plus_y - *px == py);
     assert(z->to_string() == "0");
 
-    const algebra::Polynode<int>* fzero = ns.polynode({{
-            ns.mononode({ns.node(ns.zero()->hash())->hash()})->hash(), 1
+    const algebra::Polynode<R>* fzero = ns.polynode({{
+            ns.mononode({{ns.node(ns.zero_p()->hash)->hash, 1}})->hash, 1
         }});
 
-    assert(!(*fzero == *ns.zero()));
+    assert(!(*fzero == *ns.zero_p()));
     assert(fzero->to_string() == "f(0)");
 
-    const algebra::Polynode<int>* a_plus_b = ns.polynode({{ns.mononode({a->hash()})->hash(), 1},
-            {ns.mononode({b->hash()})->hash(), 1}});
+    const algebra::Polynode<R>* a_plus_b = ns.polynode({
+            {ns.mononode({{a->hash, 1}})->hash, 1},
+            {ns.mononode({{b->hash, 1}})->hash, 1}
+        });
 
-    const algebra::Polynode<int>* foil = ns.polynode({
-            {ns.mononode({a->hash(), x->hash()})->hash(), 1}, 
-            {ns.mononode({a->hash(), y->hash()})->hash(), 1}, 
-            {ns.mononode({b->hash(), x->hash()})->hash(), 1}, 
-            {ns.mononode({b->hash(), y->hash()})->hash(), 1},
+    const algebra::Polynode<R>* foil = ns.polynode({
+            {ns.mononode({{a->hash, 1}, {x->hash, 1}})->hash, 1}, 
+            {ns.mononode({{a->hash, 1}, {y->hash, 1}})->hash, 1}, 
+            {ns.mononode({{b->hash, 1}, {x->hash, 1}})->hash, 1}, 
+            {ns.mononode({{b->hash, 1}, {y->hash, 1}})->hash, 1},
         });
 
     assert(*x_plus_y * *a_plus_b == foil);
 
-    int N = 28; // Needs to be small to avoid overflow
+    int N = 10; // Needs to be small to avoid overflow
 
-    std::unordered_map<algebra::MononodeHash, int> binom_summands;
+    std::vector<std::pair<algebra::MononodeHash, R>> binom_summands;
+    binom_summands.reserve(N + 1);
 
-    int coeff = 1;
+    R coeff = 1;
     for (int i = 0; i <= N; i++) {
-        std::vector<algebra::NodeHash> term;
-        term.reserve(N);
+        binom_summands.emplace_back(ns.mononode({{x->hash, N - i}, {y->hash, i}})->hash, coeff);
 
-        for (int j = 0; j < N; j++) {
-            if (j >= i) term.push_back(x->hash());
-            else term.push_back(y->hash());
-        }
-
-        binom_summands[ns.mononode(std::move(term))->hash()] = coeff;
-
-        if (i != N) {
-            coeff *= N - i;
-            coeff /= i + 1;
-        }
+        coeff *= N - i;
+        coeff /= i + 1;
     }
 
-    const algebra::Polynode<int>* xy_prod = ns.one();
+    const algebra::Polynode<R>* xy_prod = ns.one_p();
     for (int i = 0; i < N; i++) {
         xy_prod = *xy_prod * *x_plus_y;
     }
-    const algebra::Polynode<int>* binom = ns.polynode(std::move(binom_summands));
+    const algebra::Polynode<R>* binom = ns.polynode(binom_summands);
 
-    assert(binom == xy_prod);
+    assert(*binom == *xy_prod);
     assert(*py->sub(2, *px) == *px);
     
-    const algebra::Polynode<int>* fx = ns.polynode({{ns.mononode({ns.node(px->hash())->hash()})->hash(), 1}});
-    const algebra::Polynode<int>* ffoil = ns.polynode({{ns.mononode({ns.node(foil->hash())->hash()})->hash(), 1}});
+    const algebra::Polynode<R>* fx = ns.polynode({{ns.mononode({{ns.node(px->hash)->hash, 1}})->hash, 1}});
+    const algebra::Polynode<R>* ffoil = ns.polynode({{ns.mononode({{ns.node(foil->hash)->hash, 1}})->hash, 1}});
 
     assert(*fx->sub(1, *foil) == *ffoil);
 
-    const algebra::Polynode<int>* x_pow = ns.polynode({{
-            ns.mononode(std::vector<algebra::NodeHash>(N, x->hash()))->hash(),
+    const algebra::Polynode<R>* x_pow = ns.polynode({{
+            ns.mononode({{x->hash, N}})->hash,
         (1 << N)}});
 
     assert(*xy_prod->sub(2, *px) == *x_pow);
 
-    const algebra::Polynode<int>* fx_minus_fy = ns.polynode({
-            {ns.mononode({ns.node(px->hash())->hash()})->hash(), 1},
-            {ns.mononode({ns.node(py->hash())->hash()})->hash(), -1}
+    const algebra::Polynode<R>* fx_minus_fy = ns.polynode({
+            {ns.mononode({{ns.node(px->hash)->hash, 1}})->hash, 1},
+            {ns.mononode({{ns.node(py->hash)->hash, 1}})->hash, -1}
         });
 
     assert(*fx_minus_fy == *(*px - *py)->apply_func(*py));
@@ -118,11 +117,15 @@ void test_input() {
         "sub h4 x2 x3 + x4\n"
         "app h5 x3 + x4\n"
         "sub h6 x3 x1 - x4\n"
+        "hyp f(f(x1 + x2)) - f(2 x1) - 2 f(x2)\n"
+        "sub h8 x1 0\n"
+        "sub h8 x2 0\n"
+        "sub h9 x2 0\n"
         "end");
 
     std::stringstream out, err;
 
-    InputHandler ih(in, out, err);
+    InputHandler<R> ih(in, out, err);
     ih.handle_input();
 
     std::vector<std::string> outputs;
@@ -134,8 +137,8 @@ void test_input() {
     while (std::getline(err, error)) errors.push_back(error);
 
     std::set<int> zeros{3, 7};
-    assert(outputs.size() == 8);
-    for (size_t i = 1; i < outputs.size(); i++) {
+    assert(outputs.size() == 1 + 11 + 1 + 9);
+    for (size_t i = 1; i <= 11; i++) {
         const std::string &s = outputs[i];
 
         std::string pref = "h";
