@@ -119,13 +119,18 @@ const algebra::Polynode<R>* algebra::NodeStore<R>::polynode(const std::vector<st
 }
 
 template<class R>
-const algebra::Polynode<R>* algebra::NodeStore<R>::zero() {
+const algebra::Mononode<R>* algebra::NodeStore<R>::one_m() {
+    return this->mononode({});
+}
+
+template<class R>
+const algebra::Polynode<R>* algebra::NodeStore<R>::zero_p() {
     return polynode({});
 }
 
 template<class R>
-const algebra::Polynode<R>* algebra::NodeStore<R>::one() {
-    return polynode({{mononode({})->hash, 1}});
+const algebra::Polynode<R>* algebra::NodeStore<R>::one_p() {
+    return polynode({{this->one_m()->hash, 1}});
 }
 
 template<class R>
@@ -368,7 +373,45 @@ const algebra::Mononode<R>* algebra::Mononode<R>::operator*(const Mononode<R>& r
     return this->node_store_.insert_mononode(Mononode<R>(std::move(combined_factors), this->node_store_));
 }
 
+template<class R>
+std::pair<const algebra::Mononode<R>*, const algebra::Mononode<R>*> 
+algebra::Mononode<R>::symmetric_q(const Mononode<R>& rhs) const {
+    std::map<NodeHash, int, std::function<bool(const NodeHash, const NodeHash)>>
+        q_lhs([&node_store = this->node_store_] (const NodeHash lhs, const NodeHash rhs) 
+            { return node_store.node_cmp(lhs, rhs) < 0; }
+        ), 
+        q_rhs([&node_store = this->node_store_] (const NodeHash lhs, const NodeHash rhs) 
+            { return node_store.node_cmp(lhs, rhs) < 0; }
+        );
+    
+    for (const std::pair<const NodeHash, int> &lhs_entry : this->factors_) {
+        const NodeHash p = lhs_entry.first;
+        const int lhs_exp = lhs_entry.second;
+        if (rhs.factors_.find(p) == rhs.factors_.end()) {
+            q_rhs[p] = lhs_exp;
+        } else {
+            const int rhs_exp = rhs.factors_.at(p);
 
+            if (rhs_exp < lhs_exp) {
+                q_rhs[p] = lhs_exp - rhs_exp;
+            } else if (rhs_exp > lhs_exp) {
+                q_lhs[p] = rhs_exp - lhs_exp;
+            }
+        }
+    }
+
+    for (const std::pair<const NodeHash, int> &rhs_entry : rhs.factors_) {
+        const NodeHash p = rhs_entry.first;
+        const int rhs_exp = rhs_entry.second;
+        if (this->factors_.find(p) == this->factors_.end()) {
+            q_lhs[p] = rhs_exp;
+        } 
+        // Overlaps are already handled by the above
+    }
+
+    return {this->node_store_.insert_mononode(Mononode<R>(std::move(q_lhs), this->node_store_)),
+            this->node_store_.insert_mononode(Mononode<R>(std::move(q_rhs), this->node_store_))};
+}
 /*
  * Polynode
  */
@@ -420,6 +463,7 @@ algebra::Polynode<R>::Polynode(const std::vector<std::pair<MononodeHash, R>>&& s
         NodeStore<R> &node_store) : 
     NodeBase(std::accumulate(summands.begin(), summands.end(), PolynodeHash(0), 
                 [&node_store] (const PolynodeHash hash, const std::pair<MononodeHash, R>& cur) { 
+                    // Must combine with a commutative operation in order to create same hash as unsorted
                     return hash ^ node_store.hash(PolynodeHash(cur.first) + to_polynode_hash(cur.second));
                 }), 
              std::accumulate(summands.begin(), summands.end(), 0, 
@@ -435,6 +479,7 @@ algebra::Polynode<R>::Polynode(const std::vector<std::pair<MononodeHash, R>>& su
         NodeStore<R> &node_store) : 
     NodeBase(std::accumulate(summands.begin(), summands.end(), PolynodeHash(0), 
                 [&node_store] (const PolynodeHash hash, const std::pair<MononodeHash, R>& cur) { 
+                    // Must combine with a commutative operation in order to create same hash as unsorted
                     return hash ^ node_store.hash(PolynodeHash(cur.first) + to_polynode_hash(cur.second));
                 }), 
              std::accumulate(summands.begin(), summands.end(), 0, 
@@ -552,12 +597,40 @@ const algebra::Polynode<R>* algebra::Polynode<R>::operator*(const Polynode<R>& r
             Polynode<R>(std::move(combined_summands_vec), this->node_store_));
 }
 
+// By the definition of mononomial order, we do not have to reorder
+template<class R>
+const algebra::Polynode<R>* algebra::Polynode<R>::scale(const Mononode<R>& m, const R c) const {
+    std::vector<std::pair<MononodeHash, R>> new_summands;
+    new_summands.reserve(this->summands_.size());
+
+    for (const std::pair<MononodeHash, R> &entry : this->summands_) {
+        new_summands.emplace_back((*this->node_store_.get_mononode(entry.first) * m)->hash, entry.second * c);
+    }
+
+    return this->node_store_.insert_polynode(
+            Polynode<R>(std::move(new_summands), this->node_store_));
+}
+
+template<class R>
+const algebra::Mononode<R>* algebra::Polynode<R>::leading_m() const {
+    return this->node_store_.get_mononode(this->summands_.front().first);
+}
+
+template<class R>
+const R algebra::Polynode<R>::leading_c() const {
+    return this->summands_.front().second;
+}
+
+template<class R>
+const std::vector<std::pair<algebra::MononodeHash, R>>& algebra::Polynode<R>::summands() 
+    const { return this->summands_; }
+
 template<class R>
 const algebra::Polynode<R>* algebra::Polynode<R>::sub(const Idx var, const Polynode<R>& val) const {
     // It is likely not a repeat, so we do not compute the hash first
-    const Polynode<R>* sum = this->node_store_.zero();
+    const Polynode<R>* sum = this->node_store_.zero_p();
     for (const std::pair<MononodeHash, R> &entry : this->summands_) {
-        const Polynode<R>* term = this->node_store_.one();
+        const Polynode<R>* term = this->node_store_.one_p();
         std::unordered_map<NodeHash, int> non_sub_factors{};
 
         // Pretty costly, but we'll just multiply everything together for now
@@ -609,10 +682,10 @@ const algebra::Polynode<R>* algebra::Polynode<R>::apply_func(const Polynode<R>& 
 
 template class algebra::NodeBase<size_t>;
 
-template class algebra::NodeStore<int>;
-template class algebra::Node<int>;
-template class algebra::Mononode<int>;
-template class algebra::Polynode<int>;
+//template class algebra::NodeStore<int>;
+//template class algebra::Node<int>;
+//template class algebra::Mononode<int>;
+//template class algebra::Polynode<int>;
 
 template class algebra::NodeStore<mpq_class>;
 template class algebra::Node<mpq_class>;

@@ -1,4 +1,5 @@
 #include "../include/algebra.hpp"
+#include "../include/groebner.hpp"
 #include "../include/input.hpp"
 
 #include <algorithm>
@@ -132,11 +133,11 @@ bool InputHandler<R>::eval(std::string &cmd, std::string &rest) {
 
             if (split == std::string::npos) {
                 // No equal is implicitly rest = 0
-                this->hypotheses_.push_back(this->parse_polynode(rest)->hash);
+                this->hypotheses_.push_back(this->parse_polynode(rest));
             } else {
                 const algebra::Polynode<R> *lhs = this->parse_polynode(rest.substr(0, split)),
                                            *rhs = this->parse_polynode(rest.substr(split + 1));
-                this->hypotheses_.push_back((*lhs - *rhs)->hash);
+                this->hypotheses_.push_back(*lhs - *rhs);
             }
 
             break;
@@ -147,7 +148,7 @@ bool InputHandler<R>::eval(std::string &cmd, std::string &rest) {
             size_t split = rest.find_first_of(' ');
 
             int hypo = std::stoi(rest.substr(last + 1, split));
-            algebra::PolynodeHash primal = this->hypotheses_.at(hypo - 1);
+            const algebra::Polynode<R>* primal = this->hypotheses_.at(hypo - 1);
 
             last = split + 1;
             if (rest.at(last) != 'x') throw std::invalid_argument("Invalid sub command '" + rest + "'");
@@ -160,9 +161,9 @@ bool InputHandler<R>::eval(std::string &cmd, std::string &rest) {
             std::string polynode_str = rest.substr(last);
             clean(polynode_str);
 
-            this->hypotheses_.push_back(this->node_store_.get_polynode(primal)->sub(
+            this->hypotheses_.push_back(primal->sub(
                         var, *this->parse_polynode(polynode_str)
-                    )->hash);
+                    ));
             break;
         }
         case CMD_TYPE::app: {
@@ -171,16 +172,16 @@ bool InputHandler<R>::eval(std::string &cmd, std::string &rest) {
             size_t split = rest.find_first_of(' ');
 
             int hypo = std::stoi(rest.substr(last + 1, split));
-            algebra::PolynodeHash primal = this->hypotheses_.at(hypo - 1);
+            const algebra::Polynode<R>* primal = this->hypotheses_.at(hypo - 1);
 
             last = split + 1;
 
             std::string polynode_str = rest.substr(last);
             clean(polynode_str);
 
-            this->hypotheses_.push_back(this->node_store_.get_polynode(primal)->apply_func(
+            this->hypotheses_.push_back(primal->apply_func(
                         *this->parse_polynode(polynode_str)
-                    )->hash);
+                    ));
             break;
         }
         case CMD_TYPE::end: return true;
@@ -224,7 +225,19 @@ void InputHandler<R>::handle_input() {
 
     this->out_ << "Hypotheses:" << std::endl;
     idx = 1;
-    for (const algebra::PolynodeHash phash : this->hypotheses_) {
-        this->out_ << "h" << idx++ << ": " << this->node_store_.get_polynode(phash)->to_string() << std::endl;
+    for (const algebra::Polynode<R>* const h : this->hypotheses_) {
+        this->out_ << "h" << idx++ << ": " << h->to_string() << std::endl;
+    }
+
+    groebner::Reducer<R> reducer(this->node_store_);
+    std::vector<const algebra::Polynode<R>*> gbasis = reducer.reduced_basis(this->hypotheses_);
+
+    this->out_ << "Reduced Groebner basis:" << std::endl;
+    idx = 1;
+    for (const algebra::Polynode<R>* const h : gbasis) {
+        this->out_ << "b" << idx++ << ": " << h->to_string() << std::endl;
     }
 }
+
+//template class InputHandler<int>;
+template class InputHandler<mpq_class>;

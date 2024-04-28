@@ -65,8 +65,10 @@ namespace algebra {
 
         const Polynode<R>* polynode(const std::vector<std::pair<MononodeHash, R>>& summands);
 
-        const Polynode<R>* zero();
-        const Polynode<R>* one();
+        const Mononode<R>* one_m();
+
+        const Polynode<R>* zero_p();
+        const Polynode<R>* one_p();
 
         const Node<R>* insert_node(Node<R>&& node);
         const Mononode<R>* insert_mononode(Mononode<R>&& mononode);
@@ -138,6 +140,9 @@ namespace algebra {
                        
         const Mononode<R>* operator*(const Mononode<R>& rhs) const;
 
+        // Return {lcm(lhs, rhs) / lhs, lcm(lhs, rhs) / rhs}, the "symmetric quotient"
+        std::pair<const Mononode<R>*, const Mononode<R>*> symmetric_q(const Mononode<R>& rhs) const;
+
         friend class Polynode<R>;
         friend class NodeStore<R>;
     };
@@ -167,6 +172,21 @@ namespace algebra {
         const Polynode<R>* operator+(const Polynode<R>& rhs) const;
         const Polynode<R>* operator-(const Polynode<R>& rhs) const;
         const Polynode<R>* operator*(const Polynode<R>& rhs) const;
+
+        // Scale by c * m
+        const Polynode<R>* scale(const Mononode<R>& m, const R c) const;
+
+        // Leading monomial
+        const Mononode<R>* leading_m() const;
+
+        // Leading coefficient
+        const R leading_c() const;
+
+        // All summands
+        // Apparently minimal Gröbner basis => reduced Gröbner basis requires reduction on all summands
+        //
+        // TODO: This is very not optimal
+        const std::vector<std::pair<MononodeHash, R>>& summands() const;
 
         // Substitute a variable by a polynode
         const Polynode<R>* sub(const Idx var, const Polynode<R>& val) const;

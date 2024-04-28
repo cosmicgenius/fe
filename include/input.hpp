@@ -17,7 +17,7 @@ private:
     std::ostream &err_;
 
     algebra::NodeStore<R> node_store_;
-    std::vector<algebra::PolynodeHash> hypotheses_;
+    std::vector<const algebra::Polynode<R>*> hypotheses_;
 
     const algebra::Polynode<R>* parse_polynode(const std::string &input);
 
@@ -30,6 +30,3 @@ public:
     InputHandler(std::istream &in, std::ostream &out, std::ostream &err);
     void handle_input();
 };
-
-template class InputHandler<int>;
-template class InputHandler<mpq_class>;
