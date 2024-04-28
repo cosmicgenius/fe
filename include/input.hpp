@@ -28,5 +28,5 @@ private:
     bool handle_line(const std::string &input, int& line);
 public:
     InputHandler(std::istream &in, std::ostream &out, std::ostream &err);
-    void handle_input();
+    void handle_input(bool groebner, bool pretty);
 };

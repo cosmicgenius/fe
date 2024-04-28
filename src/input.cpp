@@ -121,9 +121,13 @@ template<class R>
 bool InputHandler<R>::eval(std::string &cmd, std::string &rest) {
     CMD_TYPE cmd_type;
     if (cmd == "hyp") cmd_type = CMD_TYPE::hyp;
+    else if (cmd == "h") cmd_type = CMD_TYPE::hyp;
     else if (cmd == "sub") cmd_type = CMD_TYPE::sub;
+    else if (cmd == "s") cmd_type = CMD_TYPE::sub;
     else if (cmd == "app") cmd_type = CMD_TYPE::app;
+    else if (cmd == "a") cmd_type = CMD_TYPE::app;
     else if (cmd == "end") cmd_type = CMD_TYPE::end;
+    else if (cmd == "e") cmd_type = CMD_TYPE::end;
     else throw std::invalid_argument("Invalid command " + cmd);
 
     switch (cmd_type) {
@@ -215,19 +219,22 @@ InputHandler<R>::InputHandler(std::istream &in, std::ostream &out, std::ostream 
 }
 
 template<class R>
-void InputHandler<R>::handle_input() {
+void InputHandler<R>::handle_input(bool groebner, bool pretty) {
     std::string input;
     int idx = 1;
     do {
-        this->out_ << "h" << idx << ": " << std::flush;
+        if (pretty) this->out_ << "h" << idx << ": " << std::flush;
         std::getline(this->in_, input);
     } while (!handle_line(input, idx));
 
-    this->out_ << "Hypotheses:" << std::endl;
+    if (pretty) this->out_ << "Hypotheses:" << std::endl;
     idx = 1;
     for (const algebra::Polynode<R>* const h : this->hypotheses_) {
-        this->out_ << "h" << idx++ << ": " << h->to_string() << std::endl;
+        if(pretty) this->out_ << "h" << idx++ << ": " << h->to_string() << std::endl;
+        else this->out_ << h->to_string() << std::endl;
     }
+
+    if (!groebner) return;
     
     // Remove duplicates
     std::set<const algebra::Polynode<R>*> reduced_hypotheses(this->hypotheses_.begin(), this->hypotheses_.end());
@@ -239,10 +246,12 @@ void InputHandler<R>::handle_input() {
     groebner::Reducer<R> reducer(this->node_store_);
     std::vector<const algebra::Polynode<R>*> gbasis = reducer.reduced_basis(this->hypotheses_);
 
-    this->out_ << "Reduced Groebner basis:" << std::endl;
+    if (pretty) this->out_ << "Reduced Groebner basis:" << std::endl;
+    else this->out_ << std::endl;
     idx = 1;
     for (const algebra::Polynode<R>* const h : gbasis) {
-        this->out_ << "b" << idx++ << ": " << h->to_string() << std::endl;
+        if (pretty) this->out_ << "b" << idx++ << ": " << h->to_string() << std::endl;
+        else this->out_ << h->to_string() << std::endl;
     }
 }
 
