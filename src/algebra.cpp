@@ -497,22 +497,26 @@ std::string algebra::Polynode<R>::to_string() const {
     // Joins strings by +
     // Not pretty 
     R coeff = this->summands_.begin()->second;
-    std::string res = (coeff == 1 ? "" : (coeff == -1 ? "-" : R_to_string(coeff) + " ")) +
-        this->node_store_.get_mononode(this->summands_.begin()->first)->to_string();
+    R a_coeff = abs(coeff);
+    const Mononode<R>* mono = this->node_store_.get_mononode(this->summands_.begin()->first);
 
+    std::string res = 
+        (*mono == *this->node_store_.one_m()) ?
+            ((coeff > 0 ? "" : "-") + R_to_string(a_coeff))
+        :
+            ((coeff > 0 ? "" : "-") + (a_coeff == 1 ? "" : R_to_string(a_coeff) + " ") + mono->to_string());
 
     for (auto it = ++this->summands_.begin(); it != this->summands_.end(); it++) {
-        R coeff = it->second;
-        R a_coeff = abs(coeff);
+        coeff = it->second;
+        a_coeff = abs(coeff);
 
-        const Mononode<R>* mono = this->node_store_.get_mononode(it->first);
+        mono = this->node_store_.get_mononode(it->first);
         
         if (*mono == *this->node_store_.one_m()) {
-            res += ((coeff > 0 ? " + " : " - ") + R_to_string(a_coeff) + " ");
+            res += ((coeff > 0 ? " + " : " - ") + R_to_string(a_coeff));
         } else {
-            res += (coeff > 0 
-                    ? (" + " + (coeff == 1 ? "" : R_to_string(a_coeff) + " "))
-                    : (" - " + (coeff == -1 ? "" : R_to_string(a_coeff) + " ")))
+            res += (coeff > 0 ? " + " : " - ")
+                + (a_coeff == 1 ? "" : R_to_string(a_coeff) + " ")
                 + mono->to_string(); 
         }
     }
