@@ -228,6 +228,13 @@ void InputHandler<R>::handle_input() {
     for (const algebra::Polynode<R>* const h : this->hypotheses_) {
         this->out_ << "h" << idx++ << ": " << h->to_string() << std::endl;
     }
+    
+    // Remove duplicates
+    std::set<const algebra::Polynode<R>*> reduced_hypotheses(this->hypotheses_.begin(), this->hypotheses_.end());
+    // Delete zeros
+    auto it = reduced_hypotheses.find(this->node_store_.zero_p());
+    if (it != reduced_hypotheses.end()) reduced_hypotheses.erase(it);
+    this->hypotheses_ = std::vector<const algebra::Polynode<R>*>(reduced_hypotheses.begin(), reduced_hypotheses.end());
 
     groebner::Reducer<R> reducer(this->node_store_);
     std::vector<const algebra::Polynode<R>*> gbasis = reducer.reduced_basis(this->hypotheses_);

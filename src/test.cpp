@@ -36,15 +36,15 @@ void test_algebra() {
 
     const algebra::Polynode<R>* z = *n_x_plus_y + *x_plus_y;
 
-    assert(*z == *ns.zero());
+    assert(*z == *ns.zero_p());
     assert(*x_plus_y - *px == py);
     assert(z->to_string() == "0");
 
     const algebra::Polynode<R>* fzero = ns.polynode({{
-            ns.mononode({{ns.node(ns.zero()->hash)->hash, 1}})->hash, 1
+            ns.mononode({{ns.node(ns.zero_p()->hash)->hash, 1}})->hash, 1
         }});
 
-    assert(!(*fzero == *ns.zero()));
+    assert(!(*fzero == *ns.zero_p()));
     assert(fzero->to_string() == "f(0)");
 
     const algebra::Polynode<R>* a_plus_b = ns.polynode({
@@ -74,7 +74,7 @@ void test_algebra() {
         coeff /= i + 1;
     }
 
-    const algebra::Polynode<R>* xy_prod = ns.one();
+    const algebra::Polynode<R>* xy_prod = ns.one_p();
     for (int i = 0; i < N; i++) {
         xy_prod = *xy_prod * *x_plus_y;
     }
@@ -137,8 +137,8 @@ void test_input() {
     while (std::getline(err, error)) errors.push_back(error);
 
     std::set<int> zeros{3, 7};
-    assert(outputs.size() == 12);
-    for (size_t i = 1; i < outputs.size(); i++) {
+    assert(outputs.size() == 1 + 11 + 1 + 9);
+    for (size_t i = 1; i <= 11; i++) {
         const std::string &s = outputs[i];
 
         std::string pref = "h";
