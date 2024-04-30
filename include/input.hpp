@@ -2,6 +2,13 @@
 
 #include <gmpxx.h>
 
+namespace Input {
+struct Arg {
+    bool groebner = true;
+    bool pretty = true;
+    bool randomize = false;
+};
+
 enum CMD_TYPE {
     hyp, // Add a hypothesis
     sub, // Substitute into a hypothesis
@@ -15,6 +22,7 @@ private:
     std::istream &in_;
     std::ostream &out_;
     std::ostream &err_;
+    const Arg opt_;
 
     algebra::NodeStore<R> node_store_;
     std::vector<const algebra::Polynode<R>*> hypotheses_;
@@ -27,6 +35,7 @@ private:
     // Return true if end
     bool handle_line(const std::string &input, int& line);
 public:
-    InputHandler(std::istream &in, std::ostream &out, std::ostream &err);
-    void handle_input(bool groebner, bool pretty);
+    InputHandler(std::istream &in, std::ostream &out, std::ostream &err, Arg opt = Arg());
+    void handle_input();
+};
 };
