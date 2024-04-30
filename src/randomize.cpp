@@ -1,5 +1,6 @@
 #include "../include/randomize.hpp"
 
+#include <gmpxx.h>
 #include <algorithm>
 #include <random>
 
@@ -20,7 +21,7 @@ std::string randomize::to_random_string(const algebra::Mononode<R> &m, algebra::
     std::vector<algebra::NodeHash> factors;
     factors.reserve(m.get_degree());
 
-    for (const std::pair<algebra::MononodeHash, int> &f : m) {
+    for (const std::pair<const algebra::NodeHash, int> &f : m) {
         factors.insert(factors.end(), f.second, f.first);
     }
 
@@ -33,15 +34,16 @@ std::string randomize::to_random_string(const algebra::Mononode<R> &m, algebra::
     std::string res = to_random_string(*node_store.get_node(factors.front()), node_store);
     for (auto it = ++factors.begin(); it != factors.end(); it++) {
         res += " ";
-        res += to_random_string(*node_store.get_node(it), node_store);
+        res += to_random_string(*node_store.get_node(*it), node_store);
     }
     return res;
 }
 
 template<class R>
 std::string randomize::to_random_string(const algebra::Polynode<R> &p, algebra::NodeStore<R> &node_store) {
-    std::vector<std::pair<algebra::MononodeHash, R>> summands = p.get_summands();
-    if (summands.empty()) return "0";
+    if (p.begin() == p.end()) return "0";
+
+    std::vector<std::pair<algebra::MononodeHash, R>> summands(p.begin(), p.end());
 
     std::random_device rd;
     std::default_random_engine generator(rd());
@@ -77,3 +79,7 @@ std::string randomize::to_random_string(const algebra::Polynode<R> &p, algebra::
     }
     return res;
 }
+
+//template std::string randomize::to_random_string(const algebra::Polynode<int> &p, algebra::NodeStore<int> &node_store);
+template std::string randomize::to_random_string(const algebra::Polynode<mpq_class> &p, algebra::NodeStore<mpq_class> &node_store);
+

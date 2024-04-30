@@ -1,5 +1,6 @@
 #include "../include/algebra.hpp"
 #include "../include/groebner.hpp"
+#include "../include/randomize.hpp"
 #include "../include/input.hpp"
 
 #include <algorithm>
@@ -36,7 +37,7 @@ mpq_class parse_coeff(const std::string &input) {
 
 // Input must be cleaned to work
 template<class R>
-const algebra::Polynode<R>* InputHandler<R>::parse_polynode(const std::string &input) {
+const algebra::Polynode<R>* Input::InputHandler<R>::parse_polynode(const std::string &input) {
     // The input will be of the form c1 prod1 + c2 prod + ... + ck prodk
     // where each prodi is a product of stuff that a node, or parentheses around a polynode
     // and the ci are coefficients
@@ -146,7 +147,7 @@ const algebra::Polynode<R>* InputHandler<R>::parse_polynode(const std::string &i
 
 // Return true if end
 template<class R>
-bool InputHandler<R>::eval(std::string &cmd, std::string &rest) {
+bool Input::InputHandler<R>::eval(std::string &cmd, std::string &rest) {
     CMD_TYPE cmd_type;
     if (cmd == "hyp") cmd_type = CMD_TYPE::hyp;
     else if (cmd == "h") cmd_type = CMD_TYPE::hyp;
@@ -230,7 +231,7 @@ bool InputHandler<R>::eval(std::string &cmd, std::string &rest) {
 
 // Return true if end
 template<class R>
-bool InputHandler<R>::handle_line(const std::string &input, int& line) {
+bool Input::InputHandler<R>::handle_line(const std::string &input, int& line) {
     size_t split = input.find(" ");
 
     std::string cmd = input.substr(0, split);
@@ -247,28 +248,28 @@ bool InputHandler<R>::handle_line(const std::string &input, int& line) {
 }
 
 template<class R>
-InputHandler<R>::InputHandler(std::istream &in, std::ostream &out, std::ostream &err) :
-    in_(in), out_(out), err_(err) {
+Input::InputHandler<R>::InputHandler(std::istream &in, std::ostream &out, std::ostream &err, Arg opt) :
+    in_(in), out_(out), err_(err), opt_(opt) {
     this->node_store_ = algebra::NodeStore<R>();
 }
 
 template<class R>
-void InputHandler<R>::handle_input(bool groebner, bool pretty) {
+void Input::InputHandler<R>::handle_input() {
     std::string input;
     int idx = 1;
     do {
-        if (pretty) this->out_ << "h" << idx << ": " << std::flush;
+        if (opt_.pretty) this->out_ << "h" << idx << ": " << std::flush;
         std::getline(this->in_, input);
     } while (!handle_line(input, idx));
 
-    if (pretty) this->out_ << "Hypotheses:" << std::endl;
+    if (opt_.pretty) this->out_ << "Hypotheses:" << std::endl;
     idx = 1;
     for (const algebra::Polynode<R>* const h : this->hypotheses_) {
-        if(pretty) this->out_ << "h" << idx++ << ": " << h->to_string() << std::endl;
-        else this->out_ << h->to_string() << std::endl;
+        if(opt_.pretty) this->out_ << "h" << idx++ << ": ";
+        this->out_ << (opt_.randomize ? randomize::to_random_string(*h, node_store_) : h->to_string()) << std::endl;
     }
 
-    if (!groebner) return;
+    if (!opt_.groebner) return;
     
     // Remove duplicates
     std::set<const algebra::Polynode<R>*> reduced_hypotheses(this->hypotheses_.begin(), this->hypotheses_.end());
@@ -280,14 +281,14 @@ void InputHandler<R>::handle_input(bool groebner, bool pretty) {
     groebner::Reducer<R> reducer(this->node_store_);
     std::vector<const algebra::Polynode<R>*> gbasis = reducer.reduced_basis(this->hypotheses_);
 
-    if (pretty) this->out_ << "Reduced Groebner basis:" << std::endl;
+    if (opt_.pretty) this->out_ << "Reduced Groebner basis:" << std::endl;
     else this->out_ << std::endl;
     idx = 1;
     for (const algebra::Polynode<R>* const h : gbasis) {
-        if (pretty) this->out_ << "b" << idx++ << ": " << h->to_string() << std::endl;
-        else this->out_ << h->to_string() << std::endl;
+        if(opt_.pretty) this->out_ << "b" << idx++ << ": ";
+        this->out_ << h->to_string() << std::endl;
     }
 }
 
-//template class InputHandler<int>;
-template class InputHandler<mpq_class>;
+//template class Input::InputHandler<int>;
+template class Input::InputHandler<mpq_class>;

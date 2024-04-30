@@ -5,29 +5,27 @@
 
 typedef mpq_class R;
 
-struct Arg {
-    bool groebner = true;
-    bool pretty = true;
-};
-
-Arg parse_arg(int argc, char** argv) {
-    Arg res;
+Input::Arg parse_arg(int argc, char** argv) {
+    Input::Arg arg;
     
     for (int i = 0; i < argc; i++) {
-        if (std::string(argv[i]) == "-no-groebner" || std::string(argv[i]) == "-ng"){
-            res.groebner = false;
-        } else if (std::string(argv[i]) == "-no-pretty" || std::string(argv[i]) == "-np"){
-            res.pretty = false;
+        std::string flag = std::string(argv[i]);
+        if (flag == "-no-groebner" || flag == "-ng") {
+            arg.groebner = false;
+        } else if (flag == "-no-pretty" || flag == "-np") {
+            arg.pretty = false;
+        } else if (flag == "-randomize" || flag == "-rand" || flag == "-r") {
+            arg.randomize = true;
         }
     }
 
-    return res;
+    return arg;
 }
 
 int main(int argc, char** argv) {
-    Arg arg = parse_arg(argc, argv);
+    Input::Arg arg = parse_arg(argc, argv);
 
-    InputHandler<R> ih(std::cin, std::cout, std::cerr);
-    ih.handle_input(arg.groebner, arg.pretty);
+    Input::InputHandler<R> handler(std::cin, std::cout, std::cerr, arg);
+    handler.handle_input();
 }
 
