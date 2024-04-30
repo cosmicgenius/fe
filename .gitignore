@@ -7,7 +7,7 @@ prof/
 gmon.out
 
 # data
-gen/*.txt
+gen/data/
 
 # scripts
 /*.py

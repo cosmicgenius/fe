@@ -37,35 +37,47 @@ mpq_class parse_coeff(const std::string &input) {
 // Input must be cleaned to work
 template<class R>
 const algebra::Polynode<R>* InputHandler<R>::parse_polynode(const std::string &input) {
-    //std::cerr << input << std::endl;
+    // The input will be of the form c1 prod1 + c2 prod + ... + ck prodk
+    // where each prodi is a product of stuff that a node, or parentheses around a polynode
+    // and the ci are coefficients
     size_t len = input.size();
-    std::unordered_map<algebra::MononodeHash, R> summands;
+    const algebra::Polynode<R>* ans = this->node_store_.zero_p();
 
     size_t last = 0, next = 0;
     int nested = 0;
     do {
+        // Seek next until to capture a summand
+        if (input[next] == '(') nested++;
+        else if (input[next] == ')') throw std::invalid_argument("Failed to parse expression '" + input + "'. Unexpected ')'");
         next++;
         for (; next < len && !((input[next] == '+' || input[next] == '-') && nested == 0); next++) {
             if (input[next] == '(') nested++;
             else if (input[next] == ')') nested--;
         }
 
-        //std::cerr << " Summand: " << next << " " << last << " " << input.substr(last, next - last) << std::endl;
-
         // [last, next) is a summand
 
-        // First thing is the coefficient
+        // We always interpret the beginning as the coefficient
         R coeff = 1;
 
         size_t cur = last;
-        for (; cur < next && input[cur] != 'x' && input[cur] != 'f'; cur++);
+        for (; cur < next && input[cur] != 'x' && input[cur] != 'f' && input[cur] != '('; cur++);
 
         std::string coeff_str = input.substr(last, cur - last);
         if (coeff_str == "" || coeff_str == "+") coeff = 1;
         else if (coeff_str == "-") coeff = -1;
-        else coeff = parse_coeff<R>(coeff_str);
+        else {
+            try {
+                coeff = parse_coeff<R>(coeff_str);
+            } catch (const std::exception &e) {
+                throw std::invalid_argument("Failed to parse expression '" + input + 
+                        "'. Unable to parse '" + coeff_str + "', treated as coefficient.");
+            }
+        }
 
-        std::unordered_map<algebra::NodeHash, int> factors;
+        std::unordered_map<algebra::NodeHash, int> mono_factors;
+
+        const algebra::Polynode<R>* term = this->node_store_.one_p();
 
         // Next, tokenize the factors
         while (cur < next) {
@@ -77,15 +89,23 @@ const algebra::Polynode<R>* InputHandler<R>::parse_polynode(const std::string &i
                 
                 //std::cerr << " Variable: " << last << " " << cur << " " << input.substr(last, cur - last) << std::endl;
 
-                std::string var_str = input.substr(last + 1, cur - last);
-                factors[this->node_store_.node(std::stoi(var_str))->hash]++;
+                std::string var_str = input.substr(last + 1, cur - last - 1);
+                int var = 0;
+                try {
+                    var = std::stoi(var_str);
+                } catch (const std::exception &e) {
+                    throw std::invalid_argument("Failed to parse expression '" + input + 
+                            "'. Unable to parse '" + input.substr(last, cur - last) + "', treated as variable.");
+                }
+                mono_factors[this->node_store_.node(var)->hash]++;
             // f(polynode), so we must recurse
             } else if (input[last] == 'f') {
                 cur++;
                 if (input[cur++] != '(') {
-                    throw std::invalid_argument("Failed to parse expression '" + input + "'");
+                    throw std::invalid_argument("Failed to parse expression '" + input + "'. f should be followed by '('.");
                 }
 
+                // Seek until degree of nesting is 0
                 int inner_nested = 1;
                 for (; cur < next && inner_nested > 0; cur++) {
                     if (input[cur] == '(') inner_nested++;
@@ -95,25 +115,33 @@ const algebra::Polynode<R>* InputHandler<R>::parse_polynode(const std::string &i
                 //std::cerr << " Function: " << last << " " << cur << " " << input.substr(last, cur - last) << std::endl;
                 
                 std::string sub_polynode = input.substr(last + 2, cur - last - 3);
-                factors[this->node_store_.node(
-                        this->parse_polynode(sub_polynode)->hash
-                    )->hash]++;
+                mono_factors[this->node_store_.node(
+                                this->parse_polynode(sub_polynode)->hash
+                             )->hash]++;
+            // (polynode), again we must recurse
+            } else if (input[last] == '(') {
+                cur++;
+
+                int inner_nested = 1;
+                for (; cur < next && inner_nested > 0; cur++) {
+                    if (input[cur] == '(') inner_nested++;
+                    else if (input[cur] == ')') inner_nested--;
+                }
+
+                std::string sub_polynode = input.substr(last + 1, cur - last - 2);
+                term = *term * *this->parse_polynode(sub_polynode);
             } else {
-                throw std::invalid_argument("Failed to parse expression '" + input + "'");
+                throw std::invalid_argument("Failed to parse expression '" + input + 
+                        "'. Invalid factor starting with '" + input[last] + "'.");
             }
         }
-        summands[this->node_store_.mononode(factors)->hash] += coeff;
+        term = *term * *this->node_store_.polynode({{ this->node_store_.mononode(mono_factors)->hash, coeff }});
+        ans = *ans + *term;
+
         last = next;
     } while (next < len);
 
-    std::vector<std::pair<algebra::MononodeHash, R>> summands_vec;
-    summands_vec.reserve(summands.size());
-    // Remove zeros
-    for (auto it = summands.begin(); it != summands.end(); it++) {
-        if (it->second != 0) summands_vec.emplace_back(std::move(*it));
-    }
-
-    return this->node_store_.polynode(summands_vec);
+    return ans;
 }
 
 // Return true if end
@@ -133,15 +161,21 @@ bool InputHandler<R>::eval(std::string &cmd, std::string &rest) {
     switch (cmd_type) {
         case CMD_TYPE::hyp: {
             clean(rest);
-            size_t split = rest.find_first_of('=');
+            std::vector<const algebra::Polynode<R>*> parts;
+            size_t last = 0, next;
+            do {
+                next = rest.find_first_of('=', last);
+                parts.push_back(this->parse_polynode(rest.substr(last, next)));
 
-            if (split == std::string::npos) {
-                // No equal is implicitly rest = 0
-                this->hypotheses_.push_back(this->parse_polynode(rest));
+                last = next + 1;
+            } while (next != std::string::npos);
+
+            if (parts.size() == 1) {
+                this->hypotheses_.push_back(parts[0]);
             } else {
-                const algebra::Polynode<R> *lhs = this->parse_polynode(rest.substr(0, split)),
-                                           *rhs = this->parse_polynode(rest.substr(split + 1));
-                this->hypotheses_.push_back(*lhs - *rhs);
+                for (size_t i = 1; i < parts.size(); i++) {
+                    this->hypotheses_.push_back(*parts[i] - *parts[0]);
+                }
             }
 
             break;
