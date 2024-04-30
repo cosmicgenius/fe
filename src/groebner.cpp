@@ -59,7 +59,7 @@ bool try_reduce(groebner::Poly<R>* &p, const groebner::PolyIter<R> &it, algebra:
     // Probably ends up being Schlemiel the painter 
     // (if nothing up to term n can be reduced the first itoration, it doesn't change the next)
     // but that's ok for now
-    for (const std::pair<algebra::MononodeHash, R> &term : p->summands()) {
+    for (const std::pair<algebra::MononodeHash, R> &term : *p) {
         groebner::Mono<R>* m = node_store.get_mononode(term.first);
         std::pair<groebner::Mono<R>*, groebner::Mono<R>*> sym_q = m->symmetric_q(*(*it)->leading_m());
 

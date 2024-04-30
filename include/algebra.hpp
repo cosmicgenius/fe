@@ -109,6 +109,10 @@ namespace algebra {
 
         std::string to_string() const;
 
+        NodeType get_type() const;
+        PolynodeHash get_polynode_hash() const;
+        Idx get_var() const;
+
         friend class Polynode<R>;
         friend class NodeStore<R>;
     };
@@ -143,6 +147,10 @@ namespace algebra {
         // Return {lcm(lhs, rhs) / lhs, lcm(lhs, rhs) / rhs}, the "symmetric quotient"
         std::pair<const Mononode<R>*, const Mononode<R>*> symmetric_q(const Mononode<R>& rhs) const;
 
+        // Allows iteration over factors
+        std::map<NodeHash, int, std::function<bool(const NodeHash, const NodeHash)>>::const_iterator begin() const;
+        std::map<NodeHash, int, std::function<bool(const NodeHash, const NodeHash)>>::const_iterator end() const;
+        
         friend class Polynode<R>;
         friend class NodeStore<R>;
     };
@@ -182,11 +190,9 @@ namespace algebra {
         // Leading coefficient
         const R leading_c() const;
 
-        // All summands
-        // Apparently minimal Gröbner basis => reduced Gröbner basis requires reduction on all summands
-        //
-        // TODO: This is very not optimal
-        const std::vector<std::pair<MononodeHash, R>>& summands() const;
+        // Allows iteration over summands
+        typename std::vector<std::pair<MononodeHash, R>>::const_iterator begin() const;
+        typename std::vector<std::pair<MononodeHash, R>>::const_iterator end() const;
 
         // Substitute a variable by a polynode
         const Polynode<R>* sub(const Idx var, const Polynode<R>& val) const;
