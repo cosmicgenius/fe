@@ -431,6 +431,9 @@ template<class R>
 std::map<algebra::NodeHash, int, std::function<bool(const algebra::NodeHash, const algebra::NodeHash)>>::const_iterator
     algebra::Mononode<R>::end() const { return this->factors_.end(); }
 
+template<class R>
+int algebra::Mononode<R>::get_degree() const { return this->degree; }
+
 /*
  * Polynode
  */
@@ -449,12 +452,12 @@ algebra::PolynodeHash to_polynode_hash(const mpq_class &r) {
 }
 
 template<class R>
-std::string R_to_string(const R &r) {
+std::string algebra::R_to_string(const R &r) {
     return std::to_string(r);
 }
 
 template<>
-std::string R_to_string(const mpq_class &r) {
+std::string algebra::R_to_string(const mpq_class &r) {
     return r.get_str();
 }
 

@@ -31,6 +31,9 @@ namespace algebra {
     // R should be an integral domain
     
     template<class R>
+    std::string R_to_string(const R& r);
+    
+    template<class R>
     class Node;
 
     template<class R>
@@ -150,6 +153,8 @@ namespace algebra {
         // Allows iteration over factors
         std::map<NodeHash, int, std::function<bool(const NodeHash, const NodeHash)>>::const_iterator begin() const;
         std::map<NodeHash, int, std::function<bool(const NodeHash, const NodeHash)>>::const_iterator end() const;
+
+        int get_degree() const;
         
         friend class Polynode<R>;
         friend class NodeStore<R>;
