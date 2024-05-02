@@ -23,11 +23,11 @@ bool try_lead_reduce(groebner::Poly<R>* &p, const groebner::PolyIter<R> &it, alg
         return false;
     }
 
-    std::pair<groebner::Mono<R>*, groebner::Mono<R>*> sym_q = p->leading_m()->symmetric_q(*(*it)->leading_m());
-
     // If the leading monomial of p is divisible by the leading monomial of *it, then subtract
-    if (*sym_q.first == *node_store.one_m()) {
+    if (p->leading_m()->divisible(*(*it)->leading_m())) {
+        std::pair<groebner::Mono<R>*, groebner::Mono<R>*> sym_q = p->leading_m()->symmetric_q(*(*it)->leading_m());
         p = *p + *(*it)->scale(*sym_q.second, -p->leading_c() / (*it)->leading_c());
+
         return true;
     }
     return false;
@@ -61,11 +61,12 @@ bool try_reduce(groebner::Poly<R>* &p, const groebner::PolyIter<R> &it, algebra:
     // but that's ok for now
     for (const std::pair<algebra::MononodeHash, R> &term : *p) {
         groebner::Mono<R>* m = node_store.get_mononode(term.first);
-        std::pair<groebner::Mono<R>*, groebner::Mono<R>*> sym_q = m->symmetric_q(*(*it)->leading_m());
 
         // If some monomial of p is divisible by the leading monomial of *it, then subtract
-        if (*sym_q.first == *node_store.one_m()) {
+        if (m->divisible(*(*it)->leading_m())) {
+            std::pair<groebner::Mono<R>*, groebner::Mono<R>*> sym_q = m->symmetric_q(*(*it)->leading_m());
             p = *p + *(*it)->scale(*sym_q.second, -term.second / (*it)->leading_c());
+
             return true;
         }
     }
@@ -101,6 +102,7 @@ std::vector<groebner::Poly<R>*> groebner::Reducer<R>::basis(std::vector<Poly<R>*
     for (size_t i = 0; i < gen.size(); i++) {
         for (size_t j = 0; j < i; j++) {
             //std::cout << "Testing " << gen[i]->to_string() << " and " << gen[j]->to_string() << std::endl;
+            //std::cout << "Testing " << i << " and " << j << ". Max length: " << gen.size() << std::endl;
             // See https://www.andrew.cmu.edu/course/15-355/lectures/lecture11.pdf
             // Buchberger's first criterion
             //
@@ -114,6 +116,7 @@ std::vector<groebner::Poly<R>*> groebner::Reducer<R>::basis(std::vector<Poly<R>*
             Poly<R>* S_red = this->lead_reduce(S, gen.begin(), gen.end());
 
             if (*S_red != *this->node_store_.zero_p()) {
+                //std::cout << "Added " << gen.size() << ": len=" << (S_red->end() - S_red->begin()) << std::endl;
                 gen.push_back(S_red);
             }
         }
@@ -132,13 +135,13 @@ std::vector<groebner::Poly<R>*> groebner::Reducer<R>::reduced_basis(std::vector<
     std::vector<bool> divisible(len, false);
     for (size_t i = 0; i < len; i++) {
         for (size_t j = 0; j < i; j++) {
-            // Try to divide basis[i].lm() and basis[j].lm() into each other with symmetric_q
-            std::pair<Mono<R>*, Mono<R>*> sym_q = basis[i]->leading_m()->symmetric_q(*basis[j]->leading_m());
+            // Try to divide basis[i].lm() and basis[j].lm() into each other
+
             // If one is divisible by the other, mark that one for deletion
             // If the leading terms are equal, we shouldn't remove both. Prioritize the first to be deleted
-            if (*sym_q.first == *this->node_store_.one_m()) {
+            if (basis[i]->leading_m()->divisible(*basis[j]->leading_m())) {
                 divisible[i] = true;
-            } else if (*sym_q.second == *this->node_store_.one_m()) {
+            } else if (basis[j]->leading_m()->divisible(*basis[i]->leading_m())) {
                 divisible[j] = true;
             }
         }

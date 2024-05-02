@@ -150,6 +150,9 @@ namespace algebra {
         // Return {lcm(lhs, rhs) / lhs, lcm(lhs, rhs) / rhs}, the "symmetric quotient"
         std::pair<const Mononode<R>*, const Mononode<R>*> symmetric_q(const Mononode<R>& rhs) const;
 
+        // Returns if rhs | lhs
+        bool divisible(const Mononode<R>& rhs) const;
+
         // Allows iteration over factors
         std::map<NodeHash, int, std::function<bool(const NodeHash, const NodeHash)>>::const_iterator begin() const;
         std::map<NodeHash, int, std::function<bool(const NodeHash, const NodeHash)>>::const_iterator end() const;

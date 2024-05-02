@@ -424,6 +424,21 @@ algebra::Mononode<R>::symmetric_q(const Mononode<R>& rhs) const {
 }
 
 template<class R>
+bool algebra::Mononode<R>::divisible(const Mononode<R>& rhs) const {
+    for (const std::pair<const NodeHash, int> &rhs_entry : rhs.factors_) {
+        const NodeHash p = rhs_entry.first;
+        const int rhs_exp = rhs_entry.second;
+        auto it = this->factors_.find(p);
+        if (it == this->factors_.end()) {
+            return false;
+        } else if (it->second < rhs_exp) {
+            return false;
+        }
+    }
+    return true;
+}
+
+template<class R>
 std::map<algebra::NodeHash, int, std::function<bool(const algebra::NodeHash, const algebra::NodeHash)>>::const_iterator
     algebra::Mononode<R>::begin() const { return this->factors_.begin(); }
 
