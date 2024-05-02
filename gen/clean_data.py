@@ -1,10 +1,11 @@
+# Cleans raw data from scraping
 from subprocess import Popen, PIPE, TimeoutExpired, DEVNULL
 import os
 
 raw_paths = [os.path.join(os.path.dirname(__file__), 'data', name) for name 
              in os.listdir(os.path.join(os.path.dirname(__file__), 'data')) if name.startswith("raw")]
 
-clean_path = os.path.join(os.path.dirname(__file__), 'data', "clean-aops-fe.txt") 
+clean_path = os.path.join(os.path.dirname(__file__), 'data', "clean-fe.txt") 
 
 def main():
     raw = []
