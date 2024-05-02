@@ -262,11 +262,13 @@ void Input::InputHandler<R>::handle_input() {
         std::getline(this->in_, input);
     } while (!handle_line(input, idx));
 
+    randomize::Randomizer<R> randomizer(this->node_store_);
+
     if (opt_.pretty) this->out_ << "Hypotheses:" << std::endl;
     idx = 1;
     for (const algebra::Polynode<R>* const h : this->hypotheses_) {
         if(opt_.pretty) this->out_ << "h" << idx++ << ": ";
-        this->out_ << (opt_.randomize ? randomize::to_random_string(*h, node_store_) : h->to_string()) << std::endl;
+        this->out_ << (opt_.randomize ? randomizer.to_random_string(*h, true) : h->to_string()) << std::endl;
     }
 
     if (!opt_.groebner) return;
