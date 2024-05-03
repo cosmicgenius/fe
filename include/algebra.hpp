@@ -147,6 +147,9 @@ namespace algebra {
                        
         const Mononode<R>* operator*(const Mononode<R>& rhs) const;
 
+        // Return lcm(lhs, rhs)
+        const Mononode<R>* lcm(const Mononode<R>& rhs) const;
+
         // Return {lcm(lhs, rhs) / lhs, lcm(lhs, rhs) / rhs}, the "symmetric quotient"
         std::pair<const Mononode<R>*, const Mononode<R>*> symmetric_q(const Mononode<R>& rhs) const;
 
