@@ -1,10 +1,7 @@
 # Randomizes cleaned data
 from subprocess import Popen, PIPE, TimeoutExpired, DEVNULL
 from random import shuffle
-import os
-
-clean_path = os.path.join(os.path.dirname(__file__), 'data', "clean-fe.txt") 
-rand_path = os.path.join(os.path.dirname(__file__), 'data', "rand-fe.txt")
+from filenames import build_path, clean_path, rand_path
 
 def main():
     cycles = int(input("How many randomization cycles?: "))
@@ -16,7 +13,7 @@ def main():
 
     rands = set()
     for c in range(cycles):
-        proc = Popen(["./build/main", "-ng", "-np", "-r"], encoding="utf-8", stdin=PIPE, stdout=PIPE, stderr=DEVNULL)
+        proc = Popen([build_path, "-ng", "-np", "-r"], encoding="utf-8", stdin=PIPE, stdout=PIPE, stderr=DEVNULL)
         try:
             stdout, _ = proc.communicate(''.join(f"h {p}" for p in clean) + "\ne\n", timeout=(len(clean) / 10))
             rands.update(stdout.split('\n'))

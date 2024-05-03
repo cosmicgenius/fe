@@ -1,11 +1,6 @@
 # Cleans raw data from scraping
 from subprocess import Popen, PIPE, TimeoutExpired, DEVNULL
-import os
-
-raw_paths = [os.path.join(os.path.dirname(__file__), 'data', name) for name 
-             in os.listdir(os.path.join(os.path.dirname(__file__), 'data')) if name.startswith("raw")]
-
-clean_path = os.path.join(os.path.dirname(__file__), 'data', "clean-fe.txt") 
+from filenames import build_path, raw_paths, clean_path
 
 def main():
     raw = []
@@ -15,7 +10,7 @@ def main():
     
     print(f"Read {len(raw)} lines of raw data")
 
-    proc = Popen(["./build/main", "-ng", "-np"], encoding="utf-8", stdin=PIPE, stdout=PIPE, stderr=DEVNULL)
+    proc = Popen([build_path, "-ng", "-np"], encoding="utf-8", stdin=PIPE, stdout=PIPE, stderr=DEVNULL)
     try:
         stdout, _ = proc.communicate(''.join(f"h {p}" for p in raw) + "\ne\n", timeout=(len(raw) / 10))
     except TimeoutExpired:
