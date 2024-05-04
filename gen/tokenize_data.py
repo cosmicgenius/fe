@@ -1,34 +1,83 @@
 """
-Encode by mapping chars to ints.
-Basically verbatim from NanoGPT: https://github.com/karpathy/nanoGPT
+Basic byte pair encoder with some 
+dirty pickling for saving
 """
+# TODO: generalize this
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")) # Stupid python
 
 import pickle
 import numpy as np
+import itertools
+from collections import Counter
 from config import rand_path, train_path, val_path, meta_path
+
+max_vocab_size = 64
+
+# Replace all instances of [a, b] with c in L
+def bpe_replace(L, a, b, c):
+    replace_idx = [i for i in range(len(L) - 1) if L[i] == a and L[i+1] == b]
+    if len(replace_idx) == 0: return L
+
+    # delete overlaps, slow, but probabily ok
+    mask = [True] * len(replace_idx)
+    for i in range(1, len(replace_idx)):
+        if replace_idx[i] - replace_idx[i-1] == 1 and mask[i-1]:
+            mask[i] = False
+    replace_idx = list(itertools.compress(replace_idx, mask))
+
+    return L[:replace_idx[0]] + [c] + list(
+           itertools.chain.from_iterable(L[i+2:j] + [c] for i, j in zip(replace_idx[:-1], replace_idx[1:]))) + \
+           L[replace_idx[-1]+2:]
+
 
 def main():
     data = ""
     with open(rand_path, 'r') as f:
         data = f.read()
-    print(f"length of dataset in characters: {len(data):,}")
+    print(f"Total number of characters in dataset: {len(data):,}")
 
-    # vocab = all chars
     chars = sorted(list(set(data)))
     vocab_size = len(chars)
-    print("all the unique characters:", ''.join(chars))
-    print(f"vocab size: {vocab_size:,}")
 
-    # Encode and decode
+    print(f"Number of distinct characters: {vocab_size:,}")
+
+    # char to int
     stoi = { ch: i  for i, ch in enumerate(chars) }
     itos = { i : ch for i, ch in enumerate(chars) }
+
+    enc = {}
+    # list where bpe[i] = s iff s encodes to i
+    dec = list(chars)
+
+    encoded_data = [stoi[c] for c in data]
+    while vocab_size < max_vocab_size:
+        if len(encoded_data) < 2: break
+
+        # slow but that's ok
+        counter = Counter(zip(encoded_data[:-1], encoded_data[1:]))
+        pair, _ = counter.most_common(1)[0]
+
+        enc[vocab_size] = pair
+        dec.append(dec[pair[0]] + dec[pair[1]])
+        print(f"Compressed pair: {(dec[pair[0]] + dec[pair[1]])!r}")
+        
+        encoded_data = bpe_replace(encoded_data, pair[0], pair[1], vocab_size)
+        vocab_size += 1
+
+    # Encode and decode
     def encode(s):
-        return [stoi[c] for c in s] 
+        L = [stoi[c] for c in s]
+        for k, pair in enc.items():
+            L = bpe_replace(L, pair[0], pair[1], k)
+        return L
+        
     #def decode(l):
-    #    return ''.join([itos[i] for i in l])
+    #    return ''.join(dec[i] for i in l)
+
+    #print(encoded_data == encode(data))
+    #print(data == decode(encoded_data))
 
     split = 0.9
     n = len(data)
@@ -38,6 +87,7 @@ def main():
     # Encode to integers
     train_ids = encode(train_data)
     val_ids = encode(val_data)
+    print(f"Final vocab size: {vocab_size:,}")
     print(f"train has {len(train_ids):,} tokens")
     print(f"val has {len(val_ids):,} tokens")
 
@@ -52,6 +102,8 @@ def main():
         'vocab_size': vocab_size,
         'itos': itos,
         'stoi': stoi,
+        'enc': enc,
+        'dec': dec,
     }
 
     with open(meta_path, 'wb') as f:

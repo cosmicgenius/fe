@@ -31,6 +31,9 @@ def main():
     rands = list(rands)
     shuffle(rands)
 
+    # Remove spaces
+    rands = [l.replace(' ', '') for l in rands]
+
     with open(rand_path, 'w', encoding="utf-8") as f:
         f.write('\n'.join(rands))
     print(f"Saved {len(rands)} lines of randomized data")

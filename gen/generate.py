@@ -11,6 +11,7 @@ from contextlib import nullcontext
 import torch
 from gpt import GPT
 from config import meta_path, models_path, GPTConfig, GenConfig, parse_args
+from tokenize_data import bpe_replace
 
 args = parse_args()
 config = GenConfig(**args)
@@ -53,9 +54,15 @@ print(f"Loading meta from {meta_path}...")
 with open(meta_path, 'rb') as f:
     meta = pickle.load(f)
 
-stoi, itos = meta['stoi'], meta['itos']
-encode = lambda s: [stoi[c] for c in s]
-decode = lambda l: ''.join([itos[i] for i in l])
+stoi, itos, enc, dec = meta['stoi'], meta['itos'], meta['enc'], meta['dec']
+def encode(s):
+    L = [stoi[c] for c in s]
+    for k, pair in enc.items():
+        L = bpe_replace(L, pair[0], pair[1], k)
+    return L
+    
+def decode(l):
+    return ''.join(dec[i] for i in l)
 
 # encode the beginning of the prompt
 start_ids = encode(config.start)
