@@ -1,7 +1,7 @@
 # Randomizes cleaned data
 from subprocess import Popen, PIPE, TimeoutExpired, DEVNULL
 from random import shuffle
-from filenames import build_path, clean_path, rand_path
+from config import build_path, clean_path, rand_path
 
 def main():
     cycles = int(input("How many randomization cycles?: "))

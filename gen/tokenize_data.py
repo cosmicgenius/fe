@@ -4,7 +4,7 @@ Basically verbatim from NanoGPT: https://github.com/karpathy/nanoGPT
 """
 import pickle
 import numpy as np
-from filenames import rand_path, train_path, val_path, meta_path
+from config import rand_path, train_path, val_path, meta_path
 
 def main():
     data = ""

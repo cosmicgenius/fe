@@ -1,6 +1,6 @@
 # Cleans raw data from scraping
 from subprocess import Popen, PIPE, TimeoutExpired, DEVNULL
-from filenames import build_path, raw_paths, clean_path
+from config import build_path, raw_paths, clean_path
 
 def main():
     raw = []
