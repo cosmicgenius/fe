@@ -4,9 +4,9 @@ import datetime
 from dataclasses import dataclass
 from typing import Any
 
-dirname = os.path.dirname(__file__)
+dirname = os.path.dirname(os.path.abspath(__file__))
 
-build_path = os.path.join(dirname, "..", "build", "main")
+build_path = os.path.join(dirname, "build", "main")
 raw_paths = [os.path.join(dirname, 'data', name) for name 
                 in os.listdir(os.path.join(dirname, 'data')) if name.startswith("raw")]
 clean_path = os.path.join(dirname, 'data', "clean-fe.txt") 
@@ -16,7 +16,7 @@ train_path = os.path.join(dirname, 'data', "train-fe.bin")
 val_path = os.path.join(dirname, 'data', "val-fe.bin")
 meta_path = os.path.join(dirname, 'data', "meta.pkl")
 
-models_path = os.path.join(dirname, 'data', 'models')
+models_path = os.path.join(dirname, 'models')
 
 @dataclass
 class GPTConfig:
@@ -41,7 +41,7 @@ class TrainConfig:
     # 'scratch' or a filename ending in '.pt' that will be sourced from data/train
     source: str                     = 'scratch' 
     # name of output file that will be put in data/train-ckpt, default based on start time
-    out: str                        = f"model-{datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}" 
+    out: str                        = f"model-{datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.pt" 
     override: bool                  = True # override the source (i.e. set out to source) if it is a file (i.e. resuming)
 
     """ Data """

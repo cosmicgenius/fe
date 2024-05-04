@@ -2,7 +2,10 @@
 Sample from a trained model
 Based on https://github.com/karpathy/nanoGPT/blob/main/sample.py
 """
+import sys
 import os
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")) # Stupid python
+
 import pickle
 from contextlib import nullcontext
 import torch

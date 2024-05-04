@@ -2,6 +2,10 @@
 Encode by mapping chars to ints.
 Basically verbatim from NanoGPT: https://github.com/karpathy/nanoGPT
 """
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")) # Stupid python
+
 import pickle
 import numpy as np
 from config import rand_path, train_path, val_path, meta_path

@@ -1,4 +1,8 @@
 # Cleans raw data from scraping
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")) # Stupid python
+
 from subprocess import Popen, PIPE, TimeoutExpired, DEVNULL
 from config import build_path, raw_paths, clean_path
 

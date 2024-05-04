@@ -161,8 +161,11 @@ rl.question("Start: ", st => {
             console.log(`Got ${data.length} results`);
             rl.question("Write to file? (y/n): ", ans => {
                 if (ans == "y" || ans == "Y") {
-                    fs.writeFileSync(path.join(__dirname, 'data',
-                        `raw-aops-${basePostData.search_settings.replaceAll(' ', '')}-${st}-${en}.txt`), data.join("\n"))
+                    const data_path = path.join('data',
+                        `raw-aops-${basePostData.search_settings.replaceAll(' ', '')}-${st}-${en}.txt`);
+
+                    fs.writeFileSync(path.join(__dirname, '..', data_path), data.join("\n"))
+                    console.log(`Wrote ${data.length} results to ${data_path}`);
                     rl.close();
                 } else {
                     rl.question("Print? (y/n): ", ans => {

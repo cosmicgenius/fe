@@ -7,10 +7,11 @@ prof/
 gmon.out
 
 # data
-gen/data/
+data/
 
-# scripts
-/*.py
+# cached models and checkpoints
+models/
 
 # pycache
 */__pycache__
+__pycache__

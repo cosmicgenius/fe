@@ -1,4 +1,8 @@
 # Randomizes cleaned data
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")) # Stupid python
+
 from subprocess import Popen, PIPE, TimeoutExpired, DEVNULL
 from random import shuffle
 from config import build_path, clean_path, rand_path
