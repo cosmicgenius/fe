@@ -18,6 +18,12 @@ meta_path = os.path.join(dirname, 'data', "meta.pkl")
 
 models_path = os.path.join(dirname, 'models')
 
+gen_path = os.path.join(dirname, 'data', 'gen-fe.txt')
+
+@dataclass
+class TokenizeConfig:
+    encoding: str   = 'bpe' # 'bpe' or 'char'
+
 @dataclass
 class GPTConfig:
     block_size: int
@@ -34,10 +40,10 @@ class TrainConfig:
 
     """ I/O """
     eval_interval: int              = 2000
-    log_interval: int               = 1
+    log_interval: int               = 10
     eval_iters: int                 = 200
     eval_only: bool                 = False # if True, script exits right after the first eval
-    always_save_checkpoint: bool    = True # if True, always save a checkpoint after each eval
+    always_save_checkpoint: bool    = False # if True, always save a checkpoint after each eval
     # 'scratch' or a filename ending in '.pt' that will be sourced from data/train
     source: str                     = 'scratch' 
     # name of output file that will be put in data/train-ckpt, default based on start time
@@ -75,33 +81,58 @@ class TrainConfig:
     dtype: str                      = 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
     compile: bool                   = True # use PyTorch 2.0 to compile the model to be faster
 
-@dataclass
-class TrainConfigCPU(TrainConfig):
-    # Smaller values for CPU training
-    eval_interval: int              = 250 # keep frequent because we'll overfit
-    eval_iters: int                 = 20
+train_configs = {
+    'CPU': TrainConfig(
+        eval_interval=250,
+        eval_iters=20,
+        log_interval=1,
+        always_save_checkpoint=True,
 
-    gradient_acc_steps: int         = 1
-    batch_size: int                 = 12
-    block_size: int                 = 64 
+        gradient_acc_steps=1,
+        batch_size=12,
+        block_size=64,
 
-    # baby GPT model
-    n_layer: int                    = 4
-    n_head: int                     = 4
-    n_embd: int                     = 128
-    dropout: float                  = 0.0
+        n_layer=4,
+        n_head=4,
+        n_embd=128,
+        dropout=0.0,
 
-    learning_rate: float            = 1e-3 # with baby networks can afford to go a bit higher
-    max_iters: int                  = 2000
-    lr_decay_iters: int             = 2000 # make equal to max_iters usually
-    min_lr: float                   = 1e-4 # learning_rate / 10 usually
+        learning_rate=1e-3,
+        max_iters=2000,
+        lr_decay_iters=2000,
+        min_lr=1e-4,
 
-    beta2: float                    = 0.99 # make a bit bigger because number of tokens per iter is small
+        beta2=0.99,
+        warmup_iters=100,
 
-    warmup_iters: int               = 100 # not super necessary potentially
+        device='cpu',
+        compile=False
+    ),
+    'CUDA-1': TrainConfig(
+        eval_interval=250, # keep frequent because we'll overfit
+        eval_iters=200,
 
-    device: str                     = 'cpu'
-    compile: bool                   = False # ??
+        gradient_acc_steps=1,
+        batch_size=64,
+        block_size=256,
+
+        n_layer=6,
+        n_head=6,
+        n_embd=384,
+        dropout=0.2,
+
+        learning_rate=1e-3, # with baby networks can afford to go a bit higher
+        max_iters=5000,
+        lr_decay_iters=5000, # make equal to max_iters usually
+        min_lr=1e-4, # learning_rate / 10 usually
+
+        beta2=0.99, # make a bit bigger because number of tokens per iter is small
+        warmup_iters=100, # not super necessary potentially
+
+        device='cuda',
+        compile=False
+    )
+}
 
 @dataclass
 class GenConfig:
@@ -117,7 +148,8 @@ class GenConfig:
     device: str                     = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
     compile: bool                   = False
 
-# A bit sad argument parser
+
+# A bit sad argument parser for configs
 # Based on https://github.com/karpathy/nanoGPT/blob/master/configurator.py
 def parse_args() -> dict[str, Any]:
     args = {}
