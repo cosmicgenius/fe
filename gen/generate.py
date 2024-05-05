@@ -123,7 +123,7 @@ def main():
             (out[i].split('\n')[:lines[i]]) for i in range(batch_size)
         ))[:config.num_lines]
 
-    with open(gen_path, 'w') as f:
+    with open(gen_path, 'a') as f:
         f.write('\n'.join(lines))
     print(f"Wrote {len(lines)} lines to {gen_path}")
 
