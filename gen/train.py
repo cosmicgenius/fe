@@ -81,6 +81,9 @@ def main():
         # why is pyright erroring here?
         gptconf = GPTConfig(**model_args)
         model: GPT = GPT(gptconf)
+
+        model.to(config.device)
+
         optimizer = model.configure_optimizers(config.weight_decay, config.learning_rate, (config.beta1, config.beta2), device_type)
 
     elif config.source.endswith('.pt'):
@@ -112,9 +115,12 @@ def main():
         for k,v in list(state_dict.items()):
             if k.startswith(unwanted_prefix):
                 state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+
         model.load_state_dict(state_dict)
         iter_num = checkpoint['iter_num']
         best_val_loss = checkpoint['best_val_loss']
+
+        model.to(config.device)
 
         optimizer = model.configure_optimizers(config.weight_decay, config.learning_rate, (config.beta1, config.beta2), device_type)
         optimizer.load_state_dict(checkpoint['optimizer'])
@@ -123,7 +129,6 @@ def main():
     else:
         raise ValueError(f"Unknown source value {config.source:!s}")
 
-    model.to(config.device)
 
     # initialize a GradScaler. If enabled=False scaler is a no-op
     scaler = torch.cuda.amp.GradScaler(enabled=(device_type == "cuda" and config.dtype == 'float16'))
