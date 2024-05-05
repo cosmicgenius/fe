@@ -80,9 +80,9 @@ class Block(nn.Module):
     def __init__(self, config):
         # n_embd: embedding dimension, n_head: the number of heads we'd like
         super().__init__()
-        self.ln_1 = nn.LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
         self.attn = CausalSelfAttention(config)
-        self.ln_2 = nn.LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.ffwd = FeedForward(config)
 
     def forward(self, x):
