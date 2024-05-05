@@ -21,7 +21,7 @@ from config import GPTConfig, TrainConfig
 def train(config: TrainConfig, train_path, val_path, meta_path, models_path):
     print("Set configuration:")
     for k, v in config.__dict__.items():
-        print(f"{k} = {v}")
+        print(f"{k} = {v!r}")
 
     if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
         config.dtype = 'bfloat16'

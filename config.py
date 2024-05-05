@@ -18,6 +18,8 @@ meta_path = os.path.join(dirname, 'data', "meta.pkl")
 
 models_path = os.path.join(dirname, 'models')
 
+gen_path = os.path.join(dirname, 'data', 'gen-fe.txt')
+
 @dataclass
 class TokenizeConfig:
     encoding: str   = 'bpe' # 'bpe' or 'char'
