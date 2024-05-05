@@ -213,29 +213,6 @@ void algebra::NodeStore<R>::dump() const {
     std::cout << std::flush;
 }
 
-/*
- * Node
- */
-
-template<class R>
-algebra::Node<R>::Node(const PolynodeHash pol, NodeStore<R> &node_store) :
-    NodeBase(node_store.hash(pol), sq(node_store.get_polynode(pol)->weight)),
-    type_(NodeType::POL), pol_(pol), var_(0), node_store_(node_store) {}
-
-template<class R>
-algebra::Node<R>::Node(const Idx var, NodeStore<R> &node_store) : 
-    NodeBase(node_store.hash(var), 2), 
-    type_(NodeType::VAR), pol_(0), var_(var), node_store_(node_store) {}
-
-template<class R>
-std::string algebra::Node<R>::to_string() const {
-    switch (this->type_) {
-        case algebra::NodeType::POL: return std::string("f(") + 
-            this->node_store_.get_polynode(this->pol_)->to_string() + std::string(")");
-        case algebra::NodeType::VAR: return std::string("x") + std::to_string(this->var_);
-    }
-    return "";
-}
 
 template<class R>
 int algebra::NodeStore<R>::node_cmp(const NodeHash lhs, const NodeHash rhs) const {
@@ -273,6 +250,39 @@ int algebra::NodeStore<R>::mononode_cmp(const MononodeHash lhs, const MononodeHa
     return 0;
 }
 
+
+/*
+ * Node
+ */
+
+template<class R>
+algebra::Node<R>::Node(const PolynodeHash pol, NodeStore<R> &node_store) :
+    NodeBase(node_store.hash(pol), sq(node_store.get_polynode(pol)->weight)),
+    type_(NodeType::POL), pol_(pol), var_(0), node_store_(node_store) {}
+
+template<class R>
+algebra::Node<R>::Node(const Idx var, NodeStore<R> &node_store) : 
+    NodeBase(node_store.hash(var), 2), 
+    type_(NodeType::VAR), pol_(0), var_(var), node_store_(node_store) {}
+
+template<class R>
+std::string algebra::Node<R>::to_string() const {
+    switch (this->type_) {
+        case algebra::NodeType::POL: return std::string("f(") + 
+            this->node_store_.get_polynode(this->pol_)->to_string() + std::string(")");
+        case algebra::NodeType::VAR: return std::string("x") + std::to_string(this->var_);
+    }
+    return "";
+}
+
+template<class R>
+algebra::NodeType algebra::Node<R>::get_type() const { return this->type_; }
+
+template<class R>
+algebra::PolynodeHash algebra::Node<R>::get_polynode_hash() const { return this->pol_; }
+
+template<class R>
+algebra::Idx algebra::Node<R>::get_var() const { return this->var_; }
 
 /*
  * Mononode
@@ -374,6 +384,35 @@ const algebra::Mononode<R>* algebra::Mononode<R>::operator*(const Mononode<R>& r
 }
 
 template<class R>
+const algebra::Mononode<R>* algebra::Mononode<R>::lcm(const algebra::Mononode<R>& rhs) const {
+    std::map<NodeHash, int, std::function<bool(const NodeHash, const NodeHash)>>
+        lcm([&node_store = this->node_store_] (const NodeHash lhs, const NodeHash rhs) 
+            { return node_store.node_cmp(lhs, rhs) < 0; }
+        );
+    
+    for (const std::pair<const NodeHash, int> &lhs_entry : this->factors_) {
+        const NodeHash p = lhs_entry.first;
+        const int lhs_exp = lhs_entry.second;
+        if (rhs.factors_.find(p) == rhs.factors_.end()) {
+            lcm[p] = lhs_exp;
+        } else {
+            lcm[p] = std::max(rhs.factors_.at(p), lhs_exp);
+        }
+    }
+
+    for (const std::pair<const NodeHash, int> &rhs_entry : rhs.factors_) {
+        const NodeHash p = rhs_entry.first;
+        const int rhs_exp = rhs_entry.second;
+        if (this->factors_.find(p) == this->factors_.end()) {
+            lcm[p] = rhs_exp;
+        } 
+        // Overlaps are already handled by the above
+    }
+
+    return this->node_store_.insert_mononode(Mononode<R>(std::move(lcm), this->node_store_));
+}
+
+template<class R>
 std::pair<const algebra::Mononode<R>*, const algebra::Mononode<R>*> 
 algebra::Mononode<R>::symmetric_q(const Mononode<R>& rhs) const {
     std::map<NodeHash, int, std::function<bool(const NodeHash, const NodeHash)>>
@@ -412,6 +451,33 @@ algebra::Mononode<R>::symmetric_q(const Mononode<R>& rhs) const {
     return {this->node_store_.insert_mononode(Mononode<R>(std::move(q_lhs), this->node_store_)),
             this->node_store_.insert_mononode(Mononode<R>(std::move(q_rhs), this->node_store_))};
 }
+
+template<class R>
+bool algebra::Mononode<R>::divisible(const Mononode<R>& rhs) const {
+    for (const std::pair<const NodeHash, int> &rhs_entry : rhs.factors_) {
+        const NodeHash p = rhs_entry.first;
+        const int rhs_exp = rhs_entry.second;
+        auto it = this->factors_.find(p);
+        if (it == this->factors_.end()) {
+            return false;
+        } else if (it->second < rhs_exp) {
+            return false;
+        }
+    }
+    return true;
+}
+
+template<class R>
+std::map<algebra::NodeHash, int, std::function<bool(const algebra::NodeHash, const algebra::NodeHash)>>::const_iterator
+    algebra::Mononode<R>::begin() const { return this->factors_.begin(); }
+
+template<class R>
+std::map<algebra::NodeHash, int, std::function<bool(const algebra::NodeHash, const algebra::NodeHash)>>::const_iterator
+    algebra::Mononode<R>::end() const { return this->factors_.end(); }
+
+template<class R>
+int algebra::Mononode<R>::get_degree() const { return this->degree; }
+
 /*
  * Polynode
  */
@@ -430,12 +496,12 @@ algebra::PolynodeHash to_polynode_hash(const mpq_class &r) {
 }
 
 template<class R>
-std::string R_to_string(const R &r) {
+std::string algebra::R_to_string(const R &r) {
     return std::to_string(r);
 }
 
 template<>
-std::string R_to_string(const mpq_class &r) {
+std::string algebra::R_to_string(const mpq_class &r) {
     return r.get_str();
 }
 
@@ -633,8 +699,12 @@ const R algebra::Polynode<R>::leading_c() const {
 }
 
 template<class R>
-const std::vector<std::pair<algebra::MononodeHash, R>>& algebra::Polynode<R>::summands() 
-    const { return this->summands_; }
+typename std::vector<std::pair<algebra::MononodeHash, R>>::const_iterator algebra::Polynode<R>::begin() 
+    const { return this->summands_.begin(); }
+
+template<class R>
+typename std::vector<std::pair<algebra::MononodeHash, R>>::const_iterator algebra::Polynode<R>::end() 
+    const { return this->summands_.end(); }
 
 template<class R>
 const algebra::Polynode<R>* algebra::Polynode<R>::sub(const Idx var, const Polynode<R>& val) const {

@@ -6,5 +6,12 @@ obj/
 prof/
 gmon.out
 
-# scripts
-*.py
+# data
+data/
+
+# cached models and checkpoints
+models/
+
+# pycache
+*/__pycache__
+__pycache__

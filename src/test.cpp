@@ -125,8 +125,8 @@ void test_input() {
 
     std::stringstream out, err;
 
-    InputHandler<R> ih(in, out, err);
-    ih.handle_input();
+    Input::InputHandler<R> handler(in, out, err);
+    handler.handle_input();
 
     std::vector<std::string> outputs;
     std::string output;

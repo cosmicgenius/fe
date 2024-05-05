@@ -31,6 +31,9 @@ namespace algebra {
     // R should be an integral domain
     
     template<class R>
+    std::string R_to_string(const R& r);
+    
+    template<class R>
     class Node;
 
     template<class R>
@@ -109,6 +112,10 @@ namespace algebra {
 
         std::string to_string() const;
 
+        NodeType get_type() const;
+        PolynodeHash get_polynode_hash() const;
+        Idx get_var() const;
+
         friend class Polynode<R>;
         friend class NodeStore<R>;
     };
@@ -140,9 +147,21 @@ namespace algebra {
                        
         const Mononode<R>* operator*(const Mononode<R>& rhs) const;
 
+        // Return lcm(lhs, rhs)
+        const Mononode<R>* lcm(const Mononode<R>& rhs) const;
+
         // Return {lcm(lhs, rhs) / lhs, lcm(lhs, rhs) / rhs}, the "symmetric quotient"
         std::pair<const Mononode<R>*, const Mononode<R>*> symmetric_q(const Mononode<R>& rhs) const;
 
+        // Returns if rhs | lhs
+        bool divisible(const Mononode<R>& rhs) const;
+
+        // Allows iteration over factors
+        std::map<NodeHash, int, std::function<bool(const NodeHash, const NodeHash)>>::const_iterator begin() const;
+        std::map<NodeHash, int, std::function<bool(const NodeHash, const NodeHash)>>::const_iterator end() const;
+
+        int get_degree() const;
+        
         friend class Polynode<R>;
         friend class NodeStore<R>;
     };
@@ -182,11 +201,9 @@ namespace algebra {
         // Leading coefficient
         const R leading_c() const;
 
-        // All summands
-        // Apparently minimal Gröbner basis => reduced Gröbner basis requires reduction on all summands
-        //
-        // TODO: This is very not optimal
-        const std::vector<std::pair<MononodeHash, R>>& summands() const;
+        // Allows iteration over summands
+        typename std::vector<std::pair<MononodeHash, R>>::const_iterator begin() const;
+        typename std::vector<std::pair<MononodeHash, R>>::const_iterator end() const;
 
         // Substitute a variable by a polynode
         const Polynode<R>* sub(const Idx var, const Polynode<R>& val) const;
