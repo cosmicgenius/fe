@@ -384,6 +384,35 @@ const algebra::Mononode<R>* algebra::Mononode<R>::operator*(const Mononode<R>& r
 }
 
 template<class R>
+const algebra::Mononode<R>* algebra::Mononode<R>::lcm(const algebra::Mononode<R>& rhs) const {
+    std::map<NodeHash, int, std::function<bool(const NodeHash, const NodeHash)>>
+        lcm([&node_store = this->node_store_] (const NodeHash lhs, const NodeHash rhs) 
+            { return node_store.node_cmp(lhs, rhs) < 0; }
+        );
+    
+    for (const std::pair<const NodeHash, int> &lhs_entry : this->factors_) {
+        const NodeHash p = lhs_entry.first;
+        const int lhs_exp = lhs_entry.second;
+        if (rhs.factors_.find(p) == rhs.factors_.end()) {
+            lcm[p] = lhs_exp;
+        } else {
+            lcm[p] = std::max(rhs.factors_.at(p), lhs_exp);
+        }
+    }
+
+    for (const std::pair<const NodeHash, int> &rhs_entry : rhs.factors_) {
+        const NodeHash p = rhs_entry.first;
+        const int rhs_exp = rhs_entry.second;
+        if (this->factors_.find(p) == this->factors_.end()) {
+            lcm[p] = rhs_exp;
+        } 
+        // Overlaps are already handled by the above
+    }
+
+    return this->node_store_.insert_mononode(Mononode<R>(std::move(lcm), this->node_store_));
+}
+
+template<class R>
 std::pair<const algebra::Mononode<R>*, const algebra::Mononode<R>*> 
 algebra::Mononode<R>::symmetric_q(const Mononode<R>& rhs) const {
     std::map<NodeHash, int, std::function<bool(const NodeHash, const NodeHash)>>
@@ -421,6 +450,21 @@ algebra::Mononode<R>::symmetric_q(const Mononode<R>& rhs) const {
 
     return {this->node_store_.insert_mononode(Mononode<R>(std::move(q_lhs), this->node_store_)),
             this->node_store_.insert_mononode(Mononode<R>(std::move(q_rhs), this->node_store_))};
+}
+
+template<class R>
+bool algebra::Mononode<R>::divisible(const Mononode<R>& rhs) const {
+    for (const std::pair<const NodeHash, int> &rhs_entry : rhs.factors_) {
+        const NodeHash p = rhs_entry.first;
+        const int rhs_exp = rhs_entry.second;
+        auto it = this->factors_.find(p);
+        if (it == this->factors_.end()) {
+            return false;
+        } else if (it->second < rhs_exp) {
+            return false;
+        }
+    }
+    return true;
 }
 
 template<class R>
