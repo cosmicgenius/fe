@@ -230,7 +230,7 @@ def train(config: TrainConfig, train_path, val_path, meta_path, models_path):
             if local_iter_num >= 5: # let the training loop settle a bit
                 mfu = raw_model.estimate_mfu(config.batch_size * config.gradient_acc_steps, dt)
                 running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-            print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+            print(f"Iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
         iter_num += 1
         local_iter_num += 1
 

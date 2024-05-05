@@ -8,6 +8,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")) 
 
 import pickle
 import itertools
+import time
 from contextlib import nullcontext
 import torch
 from gpt import GPT
@@ -96,6 +97,7 @@ def main():
     iteration = 0
     with torch.no_grad():
         with ctx:
+            t0 = time.time()
             while tot_lines < config.num_lines:
                 x = model.generate(x, max_new_tokens, temperature=config.temperature, top_k=config.top_k)
                 new_data = [decode(x[i, -max_new_tokens:].tolist()) for i in range(batch_size)]
@@ -108,8 +110,12 @@ def main():
                 if x.size(1) > block_size:
                     x = x[:, -block_size:]
                 
+                # timing and logging
                 iteration += 1
-                print(f"Iteration {iteration}: Generated {sum(lines) - tot_lines} new lines")
+                t1 = time.time()
+                dt = t1 - t0
+                t0 = t1
+                print(f"Iter {iteration}: {sum(lines) - tot_lines} new lines, time {dt:.2f}s")
                 tot_lines = sum(lines)
 
     # Cut each output at its last completed line, merge, then cut to config.num_lines
