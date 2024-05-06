@@ -7,6 +7,8 @@
 #include <iostream>
 #include <istream>
 #include <string>
+#include <set>
+#include <unordered_map>
 #include <utility>
 
 void clean(std::string &input) {
@@ -254,7 +256,7 @@ Input::InputHandler<R>::InputHandler(std::istream &in, std::ostream &out, std::o
 }
 
 template<class R>
-void Input::InputHandler<R>::handle_input() {
+void Input::InputHandler<R>::take_input() {
     std::string input;
     int idx = 1;
     do {
@@ -262,33 +264,153 @@ void Input::InputHandler<R>::handle_input() {
         std::getline(this->in_, input);
     } while (!handle_line(input, idx));
 
-    randomize::Randomizer<R> randomizer(this->node_store_);
+}
 
+template<class R>
+void Input::InputHandler<R>::echo_hypotheses() const {
     if (opt_.pretty) this->out_ << "Hypotheses:" << std::endl;
-    idx = 1;
+    int idx = 1;
     for (const algebra::Polynode<R>* const h : this->hypotheses_) {
         if(opt_.pretty) this->out_ << "h" << idx++ << ": ";
-        this->out_ << (opt_.randomize ? randomizer.to_random_string(*h, true) : h->to_string()) << std::endl;
+        this->out_ << h->to_string() << std::endl;
     }
+}
 
-    if (!opt_.groebner) return;
-    
+template<class R>
+void Input::InputHandler<R>::echo_rand_hypotheses() {
+    randomize::Randomizer<R> randomizer(this->node_store_);
+
+    if (opt_.pretty) this->out_ << "Randomized hypotheses:" << std::endl;
+    int idx = 1;
+    for (const algebra::Polynode<R>* const h : this->hypotheses_) {
+        if(opt_.pretty) this->out_ << "h" << idx++ << ": ";
+        this->out_ << randomizer.to_random_string(*h, true) << std::endl;
+    }
+}
+
+// Quick and dirty function to get the variables in a polynode
+// TODO: make this better
+template<class R>
+std::set<algebra::Idx> get_vars(const algebra::Polynode<R>& p, algebra::NodeStore<R> &node_store) {
+    std::set<algebra::Idx> vars;
+
+    for (const auto& term : p) {
+        for (const auto &node : *node_store.get_mononode(term.first)) {
+            const algebra::Node<R>* nptr = node_store.get_node(node.first);
+
+            switch (nptr->get_type()) {
+                case algebra::NodeType::VAR: {
+                    vars.insert(nptr->get_var());
+                    break;
+                }
+                case algebra::NodeType::POL: {
+                    std::set<algebra::Idx> v = get_vars(*node_store.get_polynode(nptr->get_polynode_hash()), node_store);
+                    vars.insert(v.begin(), v.end());
+                }
+            }
+        }
+    }
+    return vars;
+}
+
+template<class R>
+void Input::InputHandler<R>::clean_hypotheses() {
     // Remove duplicates
     std::set<const algebra::Polynode<R>*> reduced_hypotheses(this->hypotheses_.begin(), this->hypotheses_.end());
     // Delete zeros
     auto it = reduced_hypotheses.find(this->node_store_.zero_p());
     if (it != reduced_hypotheses.end()) reduced_hypotheses.erase(it);
     this->hypotheses_ = std::vector<const algebra::Polynode<R>*>(reduced_hypotheses.begin(), reduced_hypotheses.end());
+}
 
+template<class R>
+void Input::InputHandler<R>::prepare_hypotheses() {
+    clean_hypotheses();
+
+    // Substitute zeros
+    if (opt_.simplify >= 1) {
+        std::vector<const algebra::Polynode<R>*> sub_zero;
+        for (const algebra::Polynode<R>* h : hypotheses_) {
+            // Again slow, but that's ok (probably). TODO
+            std::set<algebra::Idx> vars = get_vars(*h, node_store_);
+
+            for (int mask = 1; mask < (1 << vars.size()); mask++) {
+                int mask_copy = mask;
+                std::unordered_set<algebra::Idx> zero_out;
+                zero_out.reserve(vars.size());
+                for (const algebra::Idx v : vars) {
+                    if (mask_copy & 1) {
+                        zero_out.insert(v);
+                    } 
+                    mask_copy >>= 1;
+                }   
+                sub_zero.push_back(h->subs_zero(zero_out));
+            }
+        }
+        
+        hypotheses_.insert(hypotheses_.end(), sub_zero.begin(), sub_zero.end());
+        clean_hypotheses();
+    }
+    // Permute the variables (and "push" them down to the n smallest indexes)
+    if (opt_.simplify >= 2) {
+        std::vector<const algebra::Polynode<R>*> permuted;
+        for (const algebra::Polynode<R>* h : hypotheses_) {
+            // Again slow, but that's ok (probably). TODO
+            std::set<algebra::Idx> vars_set = get_vars(*h, node_store_);
+            std::vector<algebra::Idx> vars_idx(vars_set.begin(), vars_set.end());
+            std::vector<algebra::Idx> new_idx(vars_set.size()); 
+            std::iota(new_idx.begin(), new_idx.end(), 1);
+
+            do {
+                std::unordered_map<algebra::Idx, algebra::Idx> replace;
+                replace.reserve(vars_idx.size());
+                
+                for (size_t i = 0; i < vars_idx.size(); i++) {
+                    replace[vars_idx[i]] = new_idx[i];
+                }
+
+                permuted.push_back(h->subs_var(replace));
+            } while (std::next_permutation(new_idx.begin(), new_idx.end()));
+        }
+        
+        hypotheses_.insert(hypotheses_.end(), permuted.begin(), permuted.end());
+        clean_hypotheses();
+    }
+
+    if (opt_.pretty) this->out_ << "Substituted to obtain the following hypotheses (simplification level = " << 
+        opt_.simplify << "):" << std::endl;
+    else this->out_ << std::endl;
+    int idx = 1;
+    for (const algebra::Polynode<R>* const h : hypotheses_) {
+        if(opt_.pretty) this->out_ << "s" << idx++ << ": ";
+        this->out_ << h->to_string() << std::endl;
+    }
+}
+
+template<class R>
+void Input::InputHandler<R>::calc_groebner() {
     groebner::Reducer<R> reducer(this->node_store_);
     std::vector<const algebra::Polynode<R>*> gbasis = reducer.reduced_basis(this->hypotheses_);
 
     if (opt_.pretty) this->out_ << "Reduced Groebner basis:" << std::endl;
     else this->out_ << std::endl;
-    idx = 1;
+    int idx = 1;
     for (const algebra::Polynode<R>* const h : gbasis) {
         if(opt_.pretty) this->out_ << "b" << idx++ << ": ";
         this->out_ << h->to_string() << std::endl;
+    }
+}
+
+template<class R>
+void Input::InputHandler<R>::handle_input() {
+    take_input();
+    echo_hypotheses();
+
+    if (opt_.randomize) echo_rand_hypotheses();
+
+    if (opt_.groebner) {
+        prepare_hypotheses();
+        calc_groebner();
     }
 }
 

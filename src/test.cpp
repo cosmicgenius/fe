@@ -7,6 +7,7 @@
 #include <ctime>
 #include <iostream>
 #include <iomanip>
+#include <set>
 #include <string>
 
 #include <gmpxx.h>
@@ -61,7 +62,7 @@ void test_algebra() {
 
     assert(*x_plus_y * *a_plus_b == foil);
 
-    int N = 10; // Needs to be small to avoid overflow
+    int N = 28; // Needs to be small to avoid overflow
 
     std::vector<std::pair<algebra::MononodeHash, R>> binom_summands;
     binom_summands.reserve(N + 1);
@@ -88,11 +89,48 @@ void test_algebra() {
 
     assert(*fx->sub(1, *foil) == *ffoil);
 
+    // f(f(x1) x2) + 2 f(x1) f(x1 + x2) - 3 f(x2) x1 x1 
+    const algebra::Polynode<R>* fancy = ns.polynode({
+            {ns.mononode({
+                { ns.node(
+                    ns.polynode({
+                        { ns.mononode({ 
+                            { ns.node(px->hash)->hash, 1 },
+                            { y->hash, 1 },
+                        })->hash, 1}, 
+                    })->hash
+                )->hash, 1 },
+            })->hash, 1},
+            {ns.mononode({ 
+                { ns.node(px->hash)->hash, 1 },
+                { ns.node(x_plus_y->hash)->hash, 1 },
+            })->hash, 2}, 
+            {ns.mononode({ 
+                { ns.node(py->hash)->hash, 1 },
+                { x->hash, 2 },
+            })->hash, -3}, 
+        });
+
+    const algebra::Polynode<R>* polynodes[] = {binom, foil, fancy};
+
+    const algebra::Node<R>* t = ns.node(10);
+    const algebra::Polynode<R>* pt = ns.polynode({{ns.mononode({{t->hash, 1}})->hash, 1}});
+    for (const algebra::Polynode<R>* p : polynodes) {
+        assert(*p->sub(1, *ns.zero_p()) == *p->subs_zero({1}));
+        assert(*p->sub(2, *ns.zero_p()) == *p->subs_zero({2}));
+        assert(*p->sub(1, *ns.zero_p())->sub(2, *ns.zero_p()) == *p->subs_zero({1, 2}));
+
+        assert(*p->sub(1, *pt)->sub(2, *px)->sub(10, *py) == *p->subs_var({{1, 2}, {2, 1}}));
+        assert(*p->sub(1, *py) == *p->subs_var({{1, 2}}));
+        assert(*p->sub(1, *py) == *p->subs_var({{1, 2}, {2, 2}}));
+    }
+
     const algebra::Polynode<R>* x_pow = ns.polynode({{
             ns.mononode({{x->hash, N}})->hash,
         (1 << N)}});
 
     assert(*xy_prod->sub(2, *px) == *x_pow);
+    assert(*xy_prod->subs_var({{1, 3}, {2, 3}}) == *x_pow->subs_var({{1, 3}}));
 
     const algebra::Polynode<R>* fx_minus_fy = ns.polynode({
             {ns.mononode({{ns.node(px->hash)->hash, 1}})->hash, 1},
@@ -100,6 +138,8 @@ void test_algebra() {
         });
 
     assert(*fx_minus_fy == *(*px - *py)->apply_func(*py));
+    assert(*fx_minus_fy->subs_var({{1, 2}, {2, 1}}) == *(-*fx_minus_fy));
+    assert(*fx_minus_fy->subs_zero({1, 2}) == *ns.zero_p());
 
     std::cout << "algebra: " << std::fixed << std::setprecision(3)
               << (double)(clock() - tStart) / CLOCKS_PER_SEC << "s"

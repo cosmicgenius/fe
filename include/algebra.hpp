@@ -5,9 +5,9 @@
 #include <cstddef>
 #include <functional>
 #include <map>
-#include <set>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace algebra {
@@ -205,8 +205,14 @@ namespace algebra {
         typename std::vector<std::pair<MononodeHash, R>>::const_iterator begin() const;
         typename std::vector<std::pair<MononodeHash, R>>::const_iterator end() const;
 
-        // Substitute a variable by a polynode
+        // Substitute a variable by a polynode (general function)
         const Polynode<R>* sub(const Idx var, const Polynode<R>& val) const;
+
+        // Substitute zeros 
+        const Polynode<R>* subs_zero(const std::unordered_set<Idx> &replace) const;
+
+        // Substitute variables for other variables
+        const Polynode<R>* subs_var(const std::unordered_map<Idx, Idx> &replace) const;
 
         // Given the equation this = 0, 
         // apply f to both sides of the equation this + rhs = rhs

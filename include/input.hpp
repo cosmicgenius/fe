@@ -4,9 +4,13 @@
 
 namespace Input {
 struct Arg {
-    bool groebner = true;
-    bool pretty = true;
-    bool randomize = false;
+    bool groebner = true; // Calculate Groebner basis?
+    bool pretty = true; // Pretty print?
+    bool randomize = false; // Randomize values and orders?
+    int simplify = 0; // Degree of simplification:
+                      // 0 = no attempt
+                      // 1 = reorder variables
+                      // 2 = 1 and plug in 0s
 };
 
 enum CMD_TYPE {
@@ -34,6 +38,14 @@ private:
 
     // Return true if end
     bool handle_line(const std::string &input, int& line);
+
+    void take_input();
+    void echo_hypotheses() const;
+    void echo_rand_hypotheses(); // Cannot be const because it uses node_store_ :(
+    void clean_hypotheses(); // Gets rid of duplicate or 0 hypotheses
+    void prepare_hypotheses(); // Prerares hypotheses for simplification
+    void calc_groebner();
+
 public:
     InputHandler(std::istream &in, std::ostream &out, std::ostream &err, Arg opt = Arg());
     void handle_input();

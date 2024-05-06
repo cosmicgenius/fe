@@ -5,21 +5,46 @@
 
 typedef mpq_class R;
 
+const std::string truthies[] = { "true", "1", "yes" };
+
+bool truthy(std::string s) {
+    // To lowercase
+    for (size_t i = 0; i < s.size(); i++) {
+        if (s[i] >= 'A' && s[i] <= 'z') s[i] += 'a' - 'A';
+    }
+
+    for (const std::string &t : truthies) {
+        if (t == s) return true;
+    }
+    return false;
+}
+
 Input::Arg parse_arg(int argc, char** argv) {
-    Input::Arg arg;
+    Input::Arg args;
     
-    for (int i = 0; i < argc; i++) {
-        std::string flag = std::string(argv[i]);
-        if (flag == "-no-groebner" || flag == "-ng") {
-            arg.groebner = false;
-        } else if (flag == "-no-pretty" || flag == "-np") {
-            arg.pretty = false;
-        } else if (flag == "-randomize" || flag == "-rand" || flag == "-r") {
-            arg.randomize = true;
+    // Support only --key=value arguments
+    for (int i = 1; i < argc; i++) {
+        std::string arg = std::string(argv[i]);
+
+        if (arg.substr(0, 2) != "--") {
+            throw std::invalid_argument("Invalid argument: " + arg);
+        } 
+        int split = arg.find_first_of('=');
+        std::string key = arg.substr(2, split - 2);
+        std::string val = arg.substr(split + 1);
+        
+        if (key == "groebner") {
+            args.groebner = truthy(val);
+        } else if (key == "pretty") {
+            args.pretty = truthy(val);
+        } else if (key == "randomize" || key == "rand") {
+            args.randomize = truthy(val);
+        } else if (key == "simplify" || key == "simp") {
+            args.simplify = std::stoi(val);
         }
     }
 
-    return arg;
+    return args;
 }
 
 int main(int argc, char** argv) {

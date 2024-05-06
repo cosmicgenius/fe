@@ -715,13 +715,14 @@ const algebra::Polynode<R>* algebra::Polynode<R>::sub(const Idx var, const Polyn
         std::unordered_map<NodeHash, int> non_sub_factors{};
 
         // Pretty costly, but we'll just multiply everything together for now
-        for (const std::pair<const NodeHash, int> &factor : this->node_store_.get_mononode(entry.first)->factors_) { 
-            switch (this->node_store_.get_node(factor.first)->type_) {
+        for (const std::pair<const NodeHash, int> &factor : *this->node_store_.get_mononode(entry.first)) { 
+            const Node<R>* nptr = node_store_.get_node(factor.first);
+            switch (nptr->type_) {
                 // If it is the correct variable, substitute
                 case NodeType::VAR: {
-                    if (this->node_store_.get_node(factor.first)->var_ == var) {
+                    if (nptr->var_ == var) {
                         for (int rep = 0; rep < factor.second; rep++) {
-                            term = *term * val;
+                            term = *term * val; // Slow, but it's probably ok because exponents are small
                         }
                     } else {
                         non_sub_factors[factor.first] += factor.second;
@@ -747,6 +748,105 @@ const algebra::Polynode<R>* algebra::Polynode<R>::sub(const Idx var, const Polyn
         sum = *sum + *term;
     }
     return sum;
+}
+
+// We do not assume that the order remains after subbing for zeros
+// TODO: can we get rid of this?
+template<class R>
+const algebra::Polynode<R>* algebra::Polynode<R>::subs_zero(const std::unordered_set<Idx>& vars) const {
+    std::map<MononodeHash, R, std::function<bool(const MononodeHash, const MononodeHash)>> 
+        new_summands([&node_store = this->node_store_] (const MononodeHash lhs, const MononodeHash rhs) {
+                    return node_store.mononode_cmp(lhs, rhs) < 0;
+                });
+
+    for (const std::pair<MononodeHash, R> &entry : summands_) {
+        // Is one of the summands zero? If yes, we can just early break
+        bool is_zero = false;
+        std::unordered_map<NodeHash, int> factors;
+        factors.reserve(node_store_.get_mononode(entry.first)->factors_.size());
+
+        for (const std::pair<const NodeHash, int> &factor : *node_store_.get_mononode(entry.first)) { 
+            const Node<R>* nptr = node_store_.get_node(factor.first);
+            switch (nptr->type_) {
+                case NodeType::VAR: {
+                    if (vars.find(nptr->var_) != vars.end()) {
+                        is_zero = true;
+                    } else {
+                        factors[factor.first] += factor.second;
+                    }
+                    break;
+                }
+                // If it is f(polynode), then we need to recursively substitute inside the entire polynode
+                case NodeType::POL: {
+                    factors[this->node_store_.node
+                            (this->node_store_.get_polynode(
+                                this->node_store_.get_node(factor.first)->pol_
+                            )->subs_zero(vars)->hash
+                        )->hash] += factor.second;
+                    break;
+                }
+            }
+            if (is_zero) break;
+        }
+        if (is_zero) continue;
+
+        new_summands[node_store_.mononode(std::move(factors))->hash] += entry.second;
+    }
+    std::vector<std::pair<MononodeHash, R>> new_summands_vec;
+    new_summands_vec.reserve(new_summands.size());
+
+    for (auto it = new_summands.begin(); it != new_summands.end(); it++) {
+        if (it->second != 0) new_summands_vec.emplace_back(std::move(*it));
+    }
+
+    return node_store_.insert_polynode(Polynode<R>(std::move(new_summands_vec), node_store_));
+}
+
+template<class R>
+const algebra::Polynode<R>* algebra::Polynode<R>::subs_var(const std::unordered_map<Idx, Idx>& replace) const {
+    std::map<MononodeHash, R, std::function<bool(const MononodeHash, const MononodeHash)>> 
+        new_summands([&node_store = this->node_store_] (const MononodeHash lhs, const MononodeHash rhs) {
+                    return node_store.mononode_cmp(lhs, rhs) < 0;
+                });
+
+    for (const std::pair<MononodeHash, R> &entry : summands_) {
+        std::unordered_map<NodeHash, int> factors;
+        factors.reserve(node_store_.get_mononode(entry.first)->factors_.size());
+
+        for (const std::pair<const NodeHash, int> &factor : *node_store_.get_mononode(entry.first)) { 
+            const Node<R>* nptr = node_store_.get_node(factor.first);
+            switch (nptr->type_) {
+                case NodeType::VAR: {
+                    auto it = replace.find(nptr->var_);
+                    if (it != replace.end()) {
+                        factors[node_store_.node(it->second)->hash] += factor.second;
+                    } else {
+                        factors[factor.first] += factor.second;
+                    }
+                    break;
+                }
+                // If it is f(polynode), then we need to recursively substitute inside the entire polynode
+                case NodeType::POL: {
+                    factors[this->node_store_.node
+                            (this->node_store_.get_polynode(
+                                this->node_store_.get_node(factor.first)->pol_
+                            )->subs_var(replace)->hash
+                        )->hash] += factor.second;
+                    break;
+                }
+
+            }
+        }
+        new_summands[node_store_.mononode(std::move(factors))->hash] += entry.second;
+    }
+    std::vector<std::pair<MononodeHash, R>> new_summands_vec;
+    new_summands_vec.reserve(new_summands.size());
+
+    for (auto it = new_summands.begin(); it != new_summands.end(); it++) {
+        if (it->second != 0) new_summands_vec.emplace_back(std::move(*it));
+    }
+
+    return node_store_.insert_polynode(Polynode<R>(std::move(new_summands_vec), node_store_));
 }
 
 template<class R>
