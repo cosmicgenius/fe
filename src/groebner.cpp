@@ -42,7 +42,7 @@ groebner::Poly<R>* groebner::Reducer<R>::lead_reduce(Poly<R>* p, const PolyIter<
         reduced = true;
 
         for (PolyIter<R> it = b_start; it != b_end; it++) {
-            if (try_lead_reduce(p, it, this->node_store_)) {
+            if (try_lead_reduce(p, it, node_store_)) {
                 reduced = false;
             }
         }
@@ -86,13 +86,13 @@ groebner::Poly<R>* groebner::Reducer<R>::reduce(Poly<R>* p,
         reduced = true;
 
         for (PolyIter<R> it = b_start; it != b_end; it++) {
-            if (try_reduce(p, it, this->node_store_)) {
+            if (try_reduce(p, it, node_store_)) {
                 reduced = false;
             }
         }
 
         for (PolyIter<R> it = b_start2; it != b_end2; it++) {
-            if (try_reduce(p, it, this->node_store_)) {
+            if (try_reduce(p, it, node_store_)) {
                 reduced = false;
             }
         }
@@ -171,10 +171,10 @@ std::vector<groebner::Poly<R>*> groebner::Reducer<R>::basis(std::vector<Poly<R>*
             continue;
         }
 
-        Poly<R>* S = this->S_poly(gen[i], gen[j]);
-        Poly<R>* S_red = this->lead_reduce(S, gen.begin(), gen.end());
+        Poly<R>* S = S_poly(gen[i], gen[j]);
+        Poly<R>* S_red = lead_reduce(S, gen.begin(), gen.end());
 
-        if (*S_red != *this->node_store_.zero_p()) {
+        if (*S_red != *node_store_.zero_p()) {
             //std::cout << "Added " << gen.size() << ": len=" << (S_red->end() - S_red->begin()) << std::endl;
 
             S_computed.push_back({});
@@ -219,7 +219,7 @@ std::vector<groebner::Poly<R>*> groebner::Reducer<R>::reduced_basis(std::vector<
     std::vector<Poly<R>*> min_basis;
     for (size_t i = 0; i < len; i++) {
         if (!divisible[i]) {
-            min_basis.push_back(basis[i]->scale(*this->node_store_.one_m(), 1 / basis[i]->leading_c()));
+            min_basis.push_back(basis[i]->scale(*node_store_.one_m(), 1 / basis[i]->leading_c()));
         }
     }
     len = min_basis.size();

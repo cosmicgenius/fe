@@ -126,7 +126,7 @@ namespace algebra {
     class Mononode : public NodeBase<MononodeHash> {
     private:
         const std::map<NodeHash, int, std::function<bool(const NodeHash, const NodeHash)>> factors_;
-        const int degree;
+        const int degree_;
 
         NodeStore<R> &node_store_;
 
