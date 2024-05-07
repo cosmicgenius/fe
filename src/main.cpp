@@ -41,6 +41,8 @@ Input::Arg parse_arg(int argc, char** argv) {
             args.randomize = truthy(val);
         } else if (key == "simplify" || key == "simp") {
             args.simplify = std::stoi(val);
+        } else if (key == "simplify_timeout" || key == "simp_timeout") {
+            args.simplify_timeout = std::stoi(val);
         }
     }
 

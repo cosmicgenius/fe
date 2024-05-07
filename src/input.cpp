@@ -389,13 +389,23 @@ void Input::InputHandler<R>::prepare_hypotheses() {
 
 template<class R>
 void Input::InputHandler<R>::calc_groebner() {
-    groebner::Reducer<R> reducer(node_store_);
-    std::vector<const algebra::Polynode<R>*> gbasis = reducer.reduced_basis(hypotheses_);
+    if (opt_.pretty) out_ << "Calculating Groebner basis ..." << std::endl;
+    groebner::Reducer<R> reducer(hypotheses_, node_store_);
+    bool finished = reducer.calculate_reduced_gbasis(opt_.simplify_timeout);
+    std::vector<const algebra::Polynode<R>*> gbasis = reducer.get_polys();
     std::sort(gbasis.begin(), gbasis.end(), [](const algebra::Polynode<R>* a, const algebra::Polynode<R>* b) {
                 return a->weight < b->weight;
             });
 
-    if (opt_.pretty) out_ << "Reduced Groebner basis:" << std::endl;
+    if (opt_.pretty) {
+        if (finished) {
+            out_ << "Finished." << std::endl;
+            out_ << "Reduced Groebner basis:" << std::endl;
+        } else {
+            out_ << "Terminated after " << opt_.simplify_timeout << "ms." << std::endl;
+            out_ << "Reduced partial Groebner basis:" << std::endl;
+        }
+    } 
     else out_ << std::endl;
     int idx = 1;
     for (const algebra::Polynode<R>* const h : gbasis) {

@@ -11,6 +11,7 @@ struct Arg {
                       // 0 = no attempt
                       // 1 = reorder variables
                       // 2 = 1 and plug in 0s
+    int simplify_timeout = 60000; // Number of milliseconds to spend simplifying
 };
 
 enum CMD_TYPE {
