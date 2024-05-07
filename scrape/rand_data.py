@@ -22,7 +22,7 @@ def main():
         try:
             stdout, _ = proc.communicate(''.join(f"h {p}" for p in clean) + "\ne\n", timeout=(len(clean) / 10))
             L = stdout.split('\n')
-            rands.update(L[len(L)//2:]) # first half are echoed hypotheses, second half are the randomized ones
+            rands.update(L[len(L)//2:-1]) # first half are echoed hypotheses, second half are the randomized ones, last line is empty
         except TimeoutExpired:
             print(f"Taking too long; killed after {len(clean) / 10}s")
             proc.kill()
