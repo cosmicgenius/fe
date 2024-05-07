@@ -17,10 +17,12 @@ def main():
 
     rands = set()
     for c in range(cycles):
-        proc = Popen([build_path, "-ng", "-np", "-r"], encoding="utf-8", stdin=PIPE, stdout=PIPE, stderr=DEVNULL)
+        proc = Popen([build_path, "--groebner=false", "--pretty=false", "--randomize=true"], 
+                     encoding="utf-8", stdin=PIPE, stdout=PIPE, stderr=DEVNULL)
         try:
             stdout, _ = proc.communicate(''.join(f"h {p}" for p in clean) + "\ne\n", timeout=(len(clean) / 10))
-            rands.update(stdout.split('\n'))
+            L = stdout.split('\n')
+            rands.update(L[len(L)//2:]) # first half are echoed hypotheses, second half are the randomized ones
         except TimeoutExpired:
             print(f"Taking too long; killed after {len(clean) / 10}s")
             proc.kill()

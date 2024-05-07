@@ -10,11 +10,11 @@ const std::string truthies[] = { "true", "1", "yes" };
 bool truthy(std::string s) {
     // To lowercase
     for (size_t i = 0; i < s.size(); i++) {
-        if (s[i] >= 'A' && s[i] <= 'z') s[i] += 'a' - 'A';
+        if (s[i] >= 'A' && s[i] <= 'Z') s[i] += 'a' - 'A';
     }
 
     for (const std::string &t : truthies) {
-        if (t == s) return true;
+        if (s == t) return true;
     }
     return false;
 }
