@@ -245,17 +245,23 @@ void algebra::NodeStore<R>::dump() const {
     std::cout << std::flush;
 }
 
-
+// Puts f(polynodes) first (smaller) to allow for elimination in mononode order
+// Inside f(polynodes), it is weight order
+// Inside variables, it is lex
 template<class R>
 int algebra::NodeStore<R>::node_cmp(const NodeHash lhs, const NodeHash rhs) const {
     const algebra::Node<R>* const lhs_ptr = get_node(lhs), *rhs_ptr = get_node(rhs);
 
-    if (lhs_ptr->stats.weight != rhs_ptr->stats.weight) return lhs_ptr->stats.weight - rhs_ptr->stats.weight;
-    // If they have the same weight and one is a variable, the other is too
-    if (lhs_ptr->type_ == algebra::NodeType::VAR) return lhs_ptr->var_ - rhs_ptr->var_;
+    if (lhs_ptr->type_ != rhs_ptr->type_) return lhs_ptr->type_ == NodeType::POL ? -1 : 1;
 
-    // They are both f(polynode), arbitrarily tiebreak
-    return (lhs == rhs) ? 0 : (lhs < rhs ? -1 : 1);
+    if (lhs_ptr->type_ == NodeType::POL) {
+        if (lhs_ptr->stats.weight != rhs_ptr->stats.weight) return rhs_ptr->stats.weight - lhs_ptr->stats.weight;
+        
+        // They are both f(polynode), with the same weight, arbitrarily tiebreak
+        return (lhs == rhs) ? 0 : (lhs < rhs ? -1 : 1);
+    } 
+    // They are both variables
+    return lhs_ptr->var_ - rhs_ptr->var_;
 }
 
 /*
@@ -268,6 +274,7 @@ int algebra::NodeStore<R>::node_cmp(const NodeHash lhs, const NodeHash rhs) cons
 template<class R>
 int algebra::NodeStore<R>::mononode_cmp(const MononodeHash lhs, const MononodeHash rhs) const {
     const Mononode<R>* const lhs_ptr = get_mononode(lhs), *rhs_ptr = get_mononode(rhs);
+    //std::cout << "Comparing: " << lhs << " " << lhs_ptr->to_string() << " " << rhs << " " << rhs_ptr->to_string() << "\n";
     if (lhs_ptr->pol_degree_ != rhs_ptr->pol_degree_) 
         return -(lhs_ptr->pol_degree_ - rhs_ptr->pol_degree_); // Reverse
 
@@ -282,12 +289,12 @@ int algebra::NodeStore<R>::mononode_cmp(const MononodeHash lhs, const MononodeHa
         // the same f(polynode) parts, so we can simply check for only one of them
         if (!on_vars && get_node(lhs_it->first)->type_ == NodeType::VAR) {
             if (lhs_ptr->var_degree_ != rhs_ptr->var_degree_) 
-                return -(lhs_ptr->var_degree_ - rhs_ptr->var_degree_); // Reverse
+                return -(lhs_ptr->var_degree_ - rhs_ptr->var_degree_); // Reversed
             on_vars = true;
         }
 
         if (lhs_it->first != rhs_it->first) 
-            return -node_cmp(lhs_it->first, rhs_it->first); // Reverse
+            return -node_cmp(lhs_it->first, rhs_it->first); // Reversed
         if (lhs_it->second != rhs_it->second) 
             return lhs_it->second < rhs_it->second ? -1 : 1; // Two reverses cancel out
     }
@@ -366,13 +373,13 @@ algebra::Mononode<R>::Mononode(
     factors_(std::move(factors)),
     var_degree_(
          std::accumulate(factors.begin(), factors.end(), 0,
-            [&node_store = node_store](int deg, const std::pair<NodeHash, int>& cur) { 
+            [&node_store = node_store](int deg, const std::pair<const NodeHash, int>& cur) { 
                 return deg + (node_store.get_node(cur.first)->get_type() == NodeType::VAR ? cur.second : 0);
             })
         ),
     pol_degree_(
          std::accumulate(factors.begin(), factors.end(), 0,
-            [&node_store = node_store](int deg, const std::pair<NodeHash, int>& cur) { 
+            [&node_store = node_store](int deg, const std::pair<const NodeHash, int>& cur) { 
                 return deg + (node_store.get_node(cur.first)->get_type() == NodeType::POL ? cur.second : 0);
             })
         ),
@@ -412,9 +419,9 @@ std::string algebra::Mononode<R>::to_string() const {
     if (factors_.empty()) return "";
 
     // Joins strings by a space
-    std::string res = node_store_.get_node(factors_.begin()->first)->to_string();
-    for (auto it = factors_.begin(); it != factors_.end(); it++) {
-        for (int rep = (it == factors_.begin()); rep < it->second; rep++) { 
+    std::string res = node_store_.get_node(begin()->first)->to_string();
+    for (auto it = begin(); it != end(); it++) {
+        for (int rep = (it == begin()); rep < it->second; rep++) { 
             res += " ";
             res += node_store_.get_node(it->first)->to_string();
         }
