@@ -234,7 +234,7 @@ void algebra::NodeStore<R>::dump() const {
     std::cout << "Mononodes:\n";
     for (const MononodeHash mh : mononode_keys) {
         const Mononode<R>& mononode = mononodes_.at(mh);
-        std::cout << mononode.to_string() << " " << mh << " " << mononode.stats << " " << mononode.degree_ << "\n";
+        std::cout << mononode.to_string() << " " << mh << " " << mononode.stats << " " << mononode.get_degree() << "\n";
     }
     std::cout << std::flush;
 
@@ -259,7 +259,8 @@ int algebra::NodeStore<R>::node_cmp(const NodeHash lhs, const NodeHash rhs) cons
 }
 
 /*
- * grevlex for now, TODO: change to some sort of elimination order
+ * Elimination order on the nodes that are f(polynode) then variables
+ * grevlex inside
  *
  * Reversed in order to put the leading monomial in summands.front()
  */ 
@@ -267,19 +268,32 @@ int algebra::NodeStore<R>::node_cmp(const NodeHash lhs, const NodeHash rhs) cons
 template<class R>
 int algebra::NodeStore<R>::mononode_cmp(const MononodeHash lhs, const MononodeHash rhs) const {
     const Mononode<R>* const lhs_ptr = get_mononode(lhs), *rhs_ptr = get_mononode(rhs);
-    if (lhs_ptr->degree_ != rhs_ptr->degree_) return -(lhs_ptr->degree_ - rhs_ptr->degree_); // Reverse
-    if (lhs_ptr->degree_ == 0) return 0; // There is only one such mononode, the empty product
+    if (lhs_ptr->pol_degree_ != rhs_ptr->pol_degree_) 
+        return -(lhs_ptr->pol_degree_ - rhs_ptr->pol_degree_); // Reverse
 
-    for (auto lhs_factor = lhs_ptr->factors_.begin(), rhs_factor = rhs_ptr->factors_.begin();
-            lhs_factor != lhs_ptr->factors_.end() && rhs_factor != rhs_ptr->factors_.end();
-            lhs_factor++, rhs_factor++) {
-        // Reversed
-        if (lhs_factor->first != rhs_factor->first) return -node_cmp(lhs_factor->first, rhs_factor->first); 
-        // Two reverses cancel out
-        if (lhs_factor->second != rhs_factor->second) return lhs_factor->second < rhs_factor->second ? -1 : 1;
+    bool on_vars = false;
+    auto lhs_it = lhs_ptr->begin(), rhs_it = rhs_ptr->begin(),
+         lhs_end = lhs_ptr->end(), rhs_end = rhs_ptr->end();
+
+    for (; lhs_it != lhs_end && rhs_it != rhs_end; lhs_it++, rhs_it++) {
+        // The first time we run out of polynodes, check for var degree
+        //
+        // Note that if nothing has returned before this point, then lhs and rhs must have
+        // the same f(polynode) parts, so we can simply check for only one of them
+        if (!on_vars && get_node(lhs_it->first)->type_ == NodeType::VAR) {
+            if (lhs_ptr->var_degree_ != rhs_ptr->var_degree_) 
+                return -(lhs_ptr->var_degree_ - rhs_ptr->var_degree_); // Reverse
+            on_vars = true;
+        }
+
+        if (lhs_it->first != rhs_it->first) 
+            return -node_cmp(lhs_it->first, rhs_it->first); // Reverse
+        if (lhs_it->second != rhs_it->second) 
+            return lhs_it->second < rhs_it->second ? -1 : 1; // Two reverses cancel out
     }
 
-    return 0;
+    // We might never hit the on_vars if statement, so we need to check here 
+    return -(lhs_ptr->var_degree_ - rhs_ptr->var_degree_); // Reverse
 }
 
 
@@ -350,10 +364,16 @@ algebra::Mononode<R>::Mononode(
             })
         ), 
     factors_(std::move(factors)),
-    degree_(
+    var_degree_(
          std::accumulate(factors.begin(), factors.end(), 0,
-            [](int deg, const std::pair<NodeHash, int>& cur) { 
-                return deg + cur.second;
+            [&node_store = node_store](int deg, const std::pair<NodeHash, int>& cur) { 
+                return deg + (node_store.get_node(cur.first)->get_type() == NodeType::VAR ? cur.second : 0);
+            })
+        ),
+    pol_degree_(
+         std::accumulate(factors.begin(), factors.end(), 0,
+            [&node_store = node_store](int deg, const std::pair<NodeHash, int>& cur) { 
+                return deg + (node_store.get_node(cur.first)->get_type() == NodeType::POL ? cur.second : 0);
             })
         ),
     node_store_(node_store) {}
@@ -373,10 +393,16 @@ algebra::Mononode<R>::Mononode(const std::unordered_map<NodeHash, int>& factors,
             })
         ), 
     factors_(std::move(clean_factors(factors, node_store))),
-    degree_(
+    var_degree_(
          std::accumulate(factors.begin(), factors.end(), 0,
-            [](int deg, const std::pair<NodeHash, int>& cur) { 
-                    return deg + cur.second;
+            [&node_store = node_store](int deg, const std::pair<NodeHash, int>& cur) { 
+                return deg + (node_store.get_node(cur.first)->get_type() == NodeType::VAR ? cur.second : 0);
+            })
+        ),
+    pol_degree_(
+         std::accumulate(factors.begin(), factors.end(), 0,
+            [&node_store = node_store](int deg, const std::pair<NodeHash, int>& cur) { 
+                return deg + (node_store.get_node(cur.first)->get_type() == NodeType::POL ? cur.second : 0);
             })
         ),
     node_store_(node_store) {}
@@ -510,7 +536,7 @@ std::map<algebra::NodeHash, int, std::function<bool(const algebra::NodeHash, con
     algebra::Mononode<R>::end() const { return factors_.end(); }
 
 template<class R>
-int algebra::Mononode<R>::get_degree() const { return degree_; }
+int algebra::Mononode<R>::get_degree() const { return var_degree_ + pol_degree_; }
 
 /*
  * Polynode
@@ -643,9 +669,8 @@ const algebra::Polynode<R>* algebra::Polynode<R>::operator+(const Polynode<R>& r
     combined_summands.reserve(summands_.size() + rhs.summands_.size());
 
     // Merge, assuming both are sorted
-    for (auto itl = summands_.begin(), itr = rhs.summands_.begin();
-            itl != summands_.end() || itr != rhs.summands_.end();) {
-        if (itl != summands_.end() && (itr == rhs.summands_.end() 
+    for (auto itl = begin(), itr = rhs.begin(); itl != end() || itr != rhs.end();) {
+        if (itl != end() && (itr == rhs.end() 
                     || node_store_.mononode_cmp(itl->first, itr->first) < 0)) {
             // Append *itl
             if (combined_summands.empty() || combined_summands.back().first != itl->first) {
