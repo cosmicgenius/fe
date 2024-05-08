@@ -15,14 +15,33 @@ namespace algebra {
     typedef size_t NodeHash;
     typedef size_t MononodeHash;
     typedef size_t PolynodeHash;
+
+    struct NodeStats;
+    std::ostream& operator<<(std::ostream& os, const algebra::NodeStats& s);
+
+    struct NodeStats {
+        int weight;
+        int nested_weight;
+        int depth;
+        int length_approx; // Approximate length of the node, treating all constants except \pm 1 as length 1 
+
+        NodeStats() = default;
+        NodeStats(const int weight, const int nested_weight, const int depth, const int length_approx);
+
+        NodeStats& add_node(const NodeStats& rhs, int exp);
+        NodeStats& add_mononode(const NodeStats& rhs, bool is_one); // Whether the coefficient is 1
+
+        friend std::ostream& algebra::operator<<(std::ostream& os, const NodeStats& s);
+    };
     
+
     template<class Hash>
     class NodeBase {
     public:
         const Hash hash;
-        const int weight;
+        const NodeStats stats;
 
-        NodeBase(const Hash hash, const int weight);
+        NodeBase(const Hash hash, const NodeStats stats);
 
         bool operator==(const NodeBase<Hash>& rhs) const;
         bool operator!=(const NodeBase<Hash>& rhs) const;

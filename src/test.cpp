@@ -171,13 +171,14 @@ void test_input() {
     std::vector<std::string> outputs;
     std::string output;
     while (std::getline(out, output)) outputs.push_back(output);
+    //for (const std::string &s : outputs) std::cout << s << std::endl;
 
     std::vector<std::string> errors;
     std::string error;
     while (std::getline(err, error)) errors.push_back(error);
 
     std::set<int> zeros{3, 7};
-    assert(outputs.size() == 1 + 11 + 1 + 9 + 1 + 9);
+    assert(outputs.size() == 1 + 11 + 1 + 9 + 3 + 9);
     for (size_t i = 1; i <= 11; i++) {
         const std::string &s = outputs[i];
 

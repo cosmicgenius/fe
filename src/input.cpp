@@ -394,7 +394,7 @@ void Input::InputHandler<R>::calc_groebner() {
     bool finished = reducer.calculate_reduced_gbasis(opt_.simplify_timeout);
     std::vector<const algebra::Polynode<R>*> gbasis = reducer.get_polys();
     std::sort(gbasis.begin(), gbasis.end(), [](const algebra::Polynode<R>* a, const algebra::Polynode<R>* b) {
-                return a->weight < b->weight;
+                return a->stats.weight < b->stats.weight;
             });
 
     if (opt_.pretty) {
@@ -410,7 +410,7 @@ void Input::InputHandler<R>::calc_groebner() {
     int idx = 1;
     for (const algebra::Polynode<R>* const h : gbasis) {
         if(opt_.pretty) out_ << "b" << idx++ << " ";
-        out_ << "[weight=" << h->weight << "]";
+        out_ << "[" << h->stats << "]";
         if (opt_.pretty) out_ << ":";
         out_ << " ";
         out_ << h->to_string() << std::endl;

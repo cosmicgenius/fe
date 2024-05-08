@@ -14,10 +14,6 @@
  * Util
  */
 
-inline int sq(const int n) {
-    return n * n;
-}
-
 template<class T>
 T pow(T n, int e) {
     T res = 1;
@@ -39,12 +35,48 @@ uint64_t fast_hash(uint64_t conj, uint64_t n) {
 }
 
 /*
- * Hashed class
+ * Node Stats
+ */
+algebra::NodeStats::NodeStats(const int weight, const int nested_weight, const int depth, const int length_approx) 
+    : weight(weight), nested_weight(nested_weight), depth(depth), length_approx(length_approx) {}
+
+algebra::NodeStats& algebra::NodeStats::add_node(const NodeStats& rhs, int exp) {
+    weight += rhs.weight * exp;
+    nested_weight += rhs.nested_weight * exp;
+    depth = std::max(depth, rhs.depth);
+    length_approx += rhs.length_approx * exp;
+
+    return *this;
+}
+algebra::NodeStats& algebra::NodeStats::add_mononode(const NodeStats& rhs, bool is_one) {
+    weight += rhs.weight;
+    nested_weight += rhs.nested_weight;
+    depth = std::max(depth, rhs.depth);
+    length_approx += rhs.length_approx + !is_one + 1; // for the operator
+
+    return *this;
+}
+
+std::ostream& algebra::operator<<(std::ostream& os, const algebra::NodeStats& s) {
+    return os << "w=" << s.weight << ",nw=" << s.nested_weight << ",d=" << s.depth << ",la=" << s.length_approx;
+}
+
+inline algebra::NodeStats from_polynode_stats(const algebra::NodeStats& stats) {
+    return algebra::NodeStats(
+        stats.weight * stats.weight, 
+        stats.weight, 
+        stats.depth + 1, 
+        stats.length_approx + 3 // for 'f(' and ')'
+    );
+}
+
+/*
+ * Node Base
  */
 
 template<class Hash>
-algebra::NodeBase<Hash>::NodeBase(const Hash hash, const int weight) 
-    : hash(hash), weight(weight) {}
+algebra::NodeBase<Hash>::NodeBase(const Hash hash, const NodeStats node_stats) 
+    : hash(hash), stats(node_stats) {}
 
 template<class Hash>
 bool algebra::NodeBase<Hash>::operator==(const NodeBase<Hash>& rhs) const
@@ -188,7 +220,7 @@ void algebra::NodeStore<R>::dump() const {
     std::cout << "Nodes:\n";
     for (const NodeHash nh : node_keys) {
         const Node<R>& node = nodes_.at(nh);
-        std::cout << node.to_string() << " " << nh << " " << node.weight << "\n";
+        std::cout << node.to_string() << " " << nh << " " << node.stats << "\n";
     }
     std::cout << std::flush;
 
@@ -202,13 +234,13 @@ void algebra::NodeStore<R>::dump() const {
     std::cout << "Mononodes:\n";
     for (const MononodeHash mh : mononode_keys) {
         const Mononode<R>& mononode = mononodes_.at(mh);
-        std::cout << mononode.to_string() << " " << mh << " " << mononode.weight << " " << mononode.degree_ << "\n";
+        std::cout << mononode.to_string() << " " << mh << " " << mononode.stats << " " << mononode.degree_ << "\n";
     }
     std::cout << std::flush;
 
     std::cout << "Polynodes:\n";
     for (const std::pair<const PolynodeHash, Polynode<R>>& polynode : polynodes_) {
-        std::cout << polynode.second.to_string() << " " << polynode.first << " " << polynode.second.weight << "\n";
+        std::cout << polynode.second.to_string() << " " << polynode.first << " " << polynode.second.stats << "\n";
     }
     std::cout << std::flush;
 }
@@ -218,7 +250,7 @@ template<class R>
 int algebra::NodeStore<R>::node_cmp(const NodeHash lhs, const NodeHash rhs) const {
     const algebra::Node<R>* const lhs_ptr = get_node(lhs), *rhs_ptr = get_node(rhs);
 
-    if (lhs_ptr->weight != rhs_ptr->weight) return lhs_ptr->weight - rhs_ptr->weight;
+    if (lhs_ptr->stats.weight != rhs_ptr->stats.weight) return lhs_ptr->stats.weight - rhs_ptr->stats.weight;
     // If they have the same weight and one is a variable, the other is too
     if (lhs_ptr->type_ == algebra::NodeType::VAR) return lhs_ptr->var_ - rhs_ptr->var_;
 
@@ -257,12 +289,12 @@ int algebra::NodeStore<R>::mononode_cmp(const MononodeHash lhs, const MononodeHa
 
 template<class R>
 algebra::Node<R>::Node(const PolynodeHash pol, NodeStore<R> &node_store) :
-    NodeBase(node_store.hash(pol), sq(node_store.get_polynode(pol)->weight)),
+    NodeBase(node_store.hash(pol), from_polynode_stats(node_store.get_polynode(pol)->stats)),
     type_(NodeType::POL), pol_(pol), var_(0), node_store_(node_store) {}
 
 template<class R>
 algebra::Node<R>::Node(const Idx var, NodeStore<R> &node_store) : 
-    NodeBase(node_store.hash(var), 2), 
+    NodeBase(node_store.hash(var), NodeStats(2, 0, 0, 2)), 
     type_(NodeType::VAR), pol_(0), var_(var), node_store_(node_store) {}
 
 template<class R>
@@ -309,18 +341,19 @@ algebra::Mononode<R>::Mononode(
     NodeBase(
          std::accumulate(factors.begin(), factors.end(), MononodeHash(1),
             [](MononodeHash hash, const std::pair<NodeHash, int>& cur) { 
-                    return hash + cur.first * NodeHash(cur.second);
+                return hash + cur.first * NodeHash(cur.second);
             }), 
-         std::accumulate(factors.begin(), factors.end(), 0, 
-            [&node_store](int weight, const std::pair<NodeHash, int>& cur) { 
-                return weight + node_store.get_node(cur.first)->weight * cur.second; 
+         factors.size() == 0 ? NodeStats(0, 0, 0, 1) :
+         std::accumulate(factors.begin(), factors.end(), NodeStats(), 
+            [&node_store](NodeStats &stats, const std::pair<NodeHash, int>& cur) { 
+                return stats.add_node(node_store.get_node(cur.first)->stats, cur.second);
             })
         ), 
     factors_(std::move(factors)),
     degree_(
          std::accumulate(factors.begin(), factors.end(), 0,
             [](int deg, const std::pair<NodeHash, int>& cur) { 
-                    return deg + cur.second;
+                return deg + cur.second;
             })
         ),
     node_store_(node_store) {}
@@ -333,9 +366,10 @@ algebra::Mononode<R>::Mononode(const std::unordered_map<NodeHash, int>& factors,
             [](MononodeHash hash, const std::pair<NodeHash, int>& cur) { 
                     return hash + cur.first * NodeHash(cur.second);
                 }), 
-         std::accumulate(factors.begin(), factors.end(), 0, 
-            [&node_store](int weight, const std::pair<NodeHash, int>& cur) { 
-                return weight + node_store.get_node(cur.first)->weight * cur.second; 
+         factors.size() == 0 ? NodeStats(0, 0, 0, 1) :
+         std::accumulate(factors.begin(), factors.end(), NodeStats(), 
+            [&node_store](NodeStats &stats, const std::pair<NodeHash, int>& cur) { 
+                return stats.add_node(node_store.get_node(cur.first)->stats, cur.second);
             })
         ), 
     factors_(std::move(clean_factors(factors, node_store))),
@@ -532,9 +566,9 @@ algebra::Polynode<R>::Polynode(const std::vector<std::pair<MononodeHash, R>>&& s
                     // Must combine with a commutative operation in order to create same hash as unsorted
                     return hash ^ node_store.hash(PolynodeHash(cur.first) + to_polynode_hash(cur.second));
                 }), 
-             std::accumulate(summands.begin(), summands.end(), 0, 
-                [&node_store] (const PolynodeHash weight, const std::pair<MononodeHash, R>& cur) { 
-                    return weight + node_store.get_mononode(cur.first)->weight;
+             std::accumulate(summands.begin(), summands.end(), NodeStats(), 
+                [&node_store] (NodeStats &stats, const std::pair<MononodeHash, R>& cur) { 
+                    return stats.add_mononode(node_store.get_mononode(cur.first)->stats, abs(cur.second) == 1);
                 })
             ),
     summands_(std::move(summands)), 
@@ -548,9 +582,9 @@ algebra::Polynode<R>::Polynode(const std::vector<std::pair<MononodeHash, R>>& su
                     // Must combine with a commutative operation in order to create same hash as unsorted
                     return hash ^ node_store.hash(PolynodeHash(cur.first) + to_polynode_hash(cur.second));
                 }), 
-             std::accumulate(summands.begin(), summands.end(), 0, 
-                [&node_store] (const PolynodeHash weight, const std::pair<MononodeHash, R>& cur) { 
-                    return weight + node_store.get_mononode(cur.first)->weight;
+             std::accumulate(summands.begin(), summands.end(), NodeStats(), 
+                [&node_store] (NodeStats &stats, const std::pair<MononodeHash, R>& cur) { 
+                    return stats.add_mononode(node_store.get_mononode(cur.first)->stats, abs(cur.second) == 1);
                 })
             ),
     summands_(std::move(clean_summands(summands, node_store))), 
