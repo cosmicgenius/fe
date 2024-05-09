@@ -14,7 +14,7 @@ def main():
     
     print(f"Read {len(raw)} lines of raw data")
 
-    proc = Popen([build_path, "-ng", "-np"], encoding="utf-8", stdin=PIPE, stdout=PIPE, stderr=DEVNULL)
+    proc = Popen([build_path, "--groebner=false", "--pretty=false"], encoding="utf-8", stdin=PIPE, stdout=PIPE, stderr=DEVNULL)
     try:
         stdout, _ = proc.communicate(''.join(f"h {p}" for p in raw) + "\ne\n", timeout=(len(raw) / 10))
     except TimeoutExpired:

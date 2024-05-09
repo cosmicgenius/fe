@@ -5,9 +5,9 @@
 #include <cstddef>
 #include <functional>
 #include <map>
-#include <set>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace algebra {
@@ -15,14 +15,33 @@ namespace algebra {
     typedef size_t NodeHash;
     typedef size_t MononodeHash;
     typedef size_t PolynodeHash;
+
+    struct NodeStats;
+    std::ostream& operator<<(std::ostream& os, const algebra::NodeStats& s);
+
+    struct NodeStats {
+        int weight;
+        int nested_weight;
+        int depth;
+        int length_approx; // Approximate length of the node, treating all constants except \pm 1 as length 1 
+
+        NodeStats() = default;
+        NodeStats(const int weight, const int nested_weight, const int depth, const int length_approx);
+
+        NodeStats& add_node(const NodeStats& rhs, int exp);
+        NodeStats& add_mononode(const NodeStats& rhs, bool is_one); // Whether the coefficient is 1
+
+        friend std::ostream& algebra::operator<<(std::ostream& os, const NodeStats& s);
+    };
     
+
     template<class Hash>
     class NodeBase {
     public:
         const Hash hash;
-        const int weight;
+        const NodeStats stats;
 
-        NodeBase(const Hash hash, const int weight);
+        NodeBase(const Hash hash, const NodeStats stats);
 
         bool operator==(const NodeBase<Hash>& rhs) const;
         bool operator!=(const NodeBase<Hash>& rhs) const;
@@ -126,7 +145,8 @@ namespace algebra {
     class Mononode : public NodeBase<MononodeHash> {
     private:
         const std::map<NodeHash, int, std::function<bool(const NodeHash, const NodeHash)>> factors_;
-        const int degree;
+        const int var_degree_;
+        const int pol_degree_;
 
         NodeStore<R> &node_store_;
 
@@ -205,8 +225,14 @@ namespace algebra {
         typename std::vector<std::pair<MononodeHash, R>>::const_iterator begin() const;
         typename std::vector<std::pair<MononodeHash, R>>::const_iterator end() const;
 
-        // Substitute a variable by a polynode
+        // Substitute a variable by a polynode (general function)
         const Polynode<R>* sub(const Idx var, const Polynode<R>& val) const;
+
+        // Substitute zeros 
+        const Polynode<R>* subs_zero(const std::unordered_set<Idx> &replace) const;
+
+        // Substitute variables for other variables
+        const Polynode<R>* subs_var(const std::unordered_map<Idx, Idx> &replace) const;
 
         // Given the equation this = 0, 
         // apply f to both sides of the equation this + rhs = rhs

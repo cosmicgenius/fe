@@ -4,8 +4,13 @@
 #include <vector>
 #include <queue>
 
+std::chrono::time_point<std::chrono::system_clock> now() {
+    return std::chrono::system_clock::now();
+}
+
 template<class R>
-groebner::Reducer<R>::Reducer(algebra::NodeStore<R> &node_store) : node_store_(node_store) {}
+groebner::Reducer<R>::Reducer(std::vector<groebner::Poly<R>*> polys, 
+        algebra::NodeStore<R> &node_store) : polys_(polys), node_store_(node_store) {}
 
 template<class R>
 groebner::Poly<R>* groebner::Reducer<R>::S_poly(Poly<R>* p1, Poly<R>* p2) {
@@ -38,11 +43,11 @@ template<class R>
 groebner::Poly<R>* groebner::Reducer<R>::lead_reduce(Poly<R>* p, const PolyIter<R> &b_start, const PolyIter<R> &b_end) {
     bool reduced = false;
     //int rep = 0;
-    while (!reduced) {
+    while (!reduced && !(stop_ && now() > stop_time_)) {
         reduced = true;
 
         for (PolyIter<R> it = b_start; it != b_end; it++) {
-            if (try_lead_reduce(p, it, this->node_store_)) {
+            if (try_lead_reduce(p, it, node_store_)) {
                 reduced = false;
             }
         }
@@ -82,17 +87,17 @@ groebner::Poly<R>* groebner::Reducer<R>::reduce(Poly<R>* p,
         const PolyIter<R> &b_start, const PolyIter<R> &b_end, 
         const PolyIter<R> &b_start2, const PolyIter<R> &b_end2) {
     bool reduced = false;
-    while (!reduced) {
+    while (!reduced && !(stop_ && now() > stop_time_)) {
         reduced = true;
 
         for (PolyIter<R> it = b_start; it != b_end; it++) {
-            if (try_reduce(p, it, this->node_store_)) {
+            if (try_reduce(p, it, node_store_)) {
                 reduced = false;
             }
         }
 
         for (PolyIter<R> it = b_start2; it != b_end2; it++) {
-            if (try_reduce(p, it, this->node_store_)) {
+            if (try_reduce(p, it, node_store_)) {
                 reduced = false;
             }
         }
@@ -103,9 +108,9 @@ groebner::Poly<R>* groebner::Reducer<R>::reduce(Poly<R>* p,
 // Basic implementation of Buchberger's algorithm
 // See https://www.andrew.cmu.edu/course/15-355/lectures/lecture11.pdf
 template<class R>
-std::vector<groebner::Poly<R>*> groebner::Reducer<R>::basis(std::vector<Poly<R>*> gen) {
-    if (gen.empty()) return gen;
-    int len = gen.size();
+bool groebner::Reducer<R>::calculate_gbasis() {
+    if (polys_.empty()) return true;
+    int len = polys_.size();
 
     // LCMs of leading mononodes
     // lm_lcms[i][j] = lcm(gen[i]->leading_m(), gen[j]->leading_m()) for i < j
@@ -131,25 +136,25 @@ std::vector<groebner::Poly<R>*> groebner::Reducer<R>::basis(std::vector<Poly<R>*
         lm_lcms[i].reserve(i);
         S_computed[i].resize(i);
         for (int j = 0; j < i; j++) {
-            lm_lcms[i].push_back(gen[i]->leading_m()->lcm(*gen[j]->leading_m())->hash);
+            lm_lcms[i].push_back(polys_[i]->leading_m()->lcm(*polys_[j]->leading_m())->hash);
             pq.push({i, j});
         }
     }
 
-    while (!pq.empty()) {
+    while (!pq.empty() && !(stop_ && now() > stop_time_)) {
         std::pair<int, int> ij = pq.top();
         pq.pop();
         
         int i = ij.first, j = ij.second;
-        len = gen.size();
+        len = polys_.size();
 
-        //std::cout << "Testing " << gen[i]->to_string() << " and " << gen[j]->to_string() << std::endl;
+        //std::cout << "Testing " << polys_[i]->to_string() << " and " << polys_[j]->to_string() << std::endl;
         //std::cout << "Testing " << i << " and " << j << ". Max length: " << len << std::endl;
 
         // Buchberger's first criterion
         // Efficient for linears
-        Mono<R>* lcm = gen[i]->leading_m()->lcm(*gen[j]->leading_m());
-        if (*(*gen[i]->leading_m() * *gen[j]->leading_m()) == *lcm) {
+        Mono<R>* lcm = polys_[i]->leading_m()->lcm(*polys_[j]->leading_m());
+        if (*(*polys_[i]->leading_m() * *polys_[j]->leading_m()) == *lcm) {
             //std::cout << "Skipping, fails Buchberger's first criterion" << std::endl;
             continue;
         }
@@ -160,7 +165,7 @@ std::vector<groebner::Poly<R>*> groebner::Reducer<R>::basis(std::vector<Poly<R>*
             if (k == i || k == j) continue;
             if (S_computed[std::max(i, k)][std::min(i, k)] && 
                 S_computed[std::max(j, k)][std::min(j, k)] && 
-                lcm->divisible(*gen[k]->leading_m())) {
+                lcm->divisible(*polys_[k]->leading_m())) {
 
                 skip = true;
                 break;
@@ -171,11 +176,11 @@ std::vector<groebner::Poly<R>*> groebner::Reducer<R>::basis(std::vector<Poly<R>*
             continue;
         }
 
-        Poly<R>* S = this->S_poly(gen[i], gen[j]);
-        Poly<R>* S_red = this->lead_reduce(S, gen.begin(), gen.end());
+        Poly<R>* S = S_poly(polys_[i], polys_[j]);
+        Poly<R>* S_red = lead_reduce(S, polys_.begin(), polys_.end());
 
-        if (*S_red != *this->node_store_.zero_p()) {
-            //std::cout << "Added " << gen.size() << ": len=" << (S_red->end() - S_red->begin()) << std::endl;
+        if (*S_red != *node_store_.zero_p()) {
+            //std::cout << "Added " << polys_.size() << ": len=" << (S_red->end() - S_red->begin()) << std::endl;
 
             S_computed.push_back({});
             S_computed.back().resize(len);
@@ -183,21 +188,24 @@ std::vector<groebner::Poly<R>*> groebner::Reducer<R>::basis(std::vector<Poly<R>*
 
             const algebra::Mononode<R> *S_lm = S_red->leading_m();
             for (int k = 0; k < len; k++) {
-                lm_lcms[len].push_back(gen[k]->leading_m()->lcm(*S_lm)->hash);
+                lm_lcms[len].push_back(polys_[k]->leading_m()->lcm(*S_lm)->hash);
                 pq.push({len, k});
             }
-            gen.push_back(S_red);
+            polys_.push_back(S_red);
         }
 
         S_computed[i][j] = true;
     }
-    return gen;
+    return !(stop_ && now() > stop_time_);
 }
 
 template<class R>
-std::vector<groebner::Poly<R>*> groebner::Reducer<R>::reduced_basis(std::vector<Poly<R>*> gen) {
-    std::vector<Poly<R>*> basis = this->basis(gen);
-    size_t len = basis.size();
+bool groebner::Reducer<R>::calculate_reduced_gbasis(int max_duration_ms) {
+    stop_ = max_duration_ms > 0;
+    stop_time_ = now() + std::chrono::milliseconds{max_duration_ms};
+
+    bool finished = calculate_gbasis();
+    size_t len = polys_.size();
 
     //std::cout << "Made basis of size " << len << std::endl;
 
@@ -205,13 +213,13 @@ std::vector<groebner::Poly<R>*> groebner::Reducer<R>::reduced_basis(std::vector<
     std::vector<bool> divisible(len, false);
     for (size_t i = 0; i < len; i++) {
         for (size_t j = 0; j < i; j++) {
-            // Try to divide basis[i].lm() and basis[j].lm() into each other
+            // Try to divide polys_[i].lm() and polys_[j].lm() into each other
 
             // If one is divisible by the other, mark that one for deletion
             // If the leading terms are equal, we shouldn't remove both. Prioritize the first to be deleted
-            if (basis[i]->leading_m()->divisible(*basis[j]->leading_m())) {
+            if (polys_[i]->leading_m()->divisible(*polys_[j]->leading_m())) {
                 divisible[i] = true;
-            } else if (basis[j]->leading_m()->divisible(*basis[i]->leading_m())) {
+            } else if (polys_[j]->leading_m()->divisible(*polys_[i]->leading_m())) {
                 divisible[j] = true;
             }
         }
@@ -219,7 +227,7 @@ std::vector<groebner::Poly<R>*> groebner::Reducer<R>::reduced_basis(std::vector<
     std::vector<Poly<R>*> min_basis;
     for (size_t i = 0; i < len; i++) {
         if (!divisible[i]) {
-            min_basis.push_back(basis[i]->scale(*this->node_store_.one_m(), 1 / basis[i]->leading_c()));
+            min_basis.push_back(polys_[i]->scale(*node_store_.one_m(), 1 / polys_[i]->leading_c()));
         }
     }
     len = min_basis.size();
@@ -227,18 +235,27 @@ std::vector<groebner::Poly<R>*> groebner::Reducer<R>::reduced_basis(std::vector<
 
     // Turn the minimal basis into a reduced basis
     // https://pi.math.cornell.edu/~dmehrle/notes/old/alggeo/15BuchbergersAlgorithm.pdf
+    //
+    // Put the result in polys
 
-    std::vector<Poly<R>*> red_basis;
-    red_basis.reserve(len);
+    polys_.clear();
+    polys_.reserve(len);
+    //std::vector<Poly<R>*> red_basis;
+    //red_basis.reserve(len);
 
     typename std::vector<Poly<R>*>::iterator after = min_basis.begin();
     for (size_t i = 0; i < len; i++) {
         after++;
 
-        red_basis.push_back(reduce(min_basis[i], after, min_basis.end(), red_basis.begin(), red_basis.end()));
+        polys_.push_back(reduce(min_basis[i], after, min_basis.end(), polys_.begin(), polys_.end()));
     }
 
-    return red_basis;
+    return finished;
+}
+
+template<class R>
+std::vector<groebner::Poly<R>*> groebner::Reducer<R>::get_polys() const {
+    return polys_;
 }
 
 template class groebner::Reducer<mpq_class>;

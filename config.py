@@ -19,6 +19,7 @@ meta_path = os.path.join(dirname, 'data', "meta.pkl")
 models_path = os.path.join(dirname, 'models')
 
 gen_path = os.path.join(dirname, 'data', 'gen-fe.txt')
+filtered_path = os.path.join(dirname, 'data', 'filtered-fe.txt')
 
 @dataclass
 class TokenizeConfig:

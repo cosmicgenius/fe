@@ -7,6 +7,8 @@
 #include <iostream>
 #include <istream>
 #include <string>
+#include <set>
+#include <unordered_map>
 #include <utility>
 
 void clean(std::string &input) {
@@ -42,7 +44,7 @@ const algebra::Polynode<R>* Input::InputHandler<R>::parse_polynode(const std::st
     // where each prodi is a product of stuff that a node, or parentheses around a polynode
     // and the ci are coefficients
     size_t len = input.size();
-    const algebra::Polynode<R>* ans = this->node_store_.zero_p();
+    const algebra::Polynode<R>* ans = node_store_.zero_p();
 
     size_t last = 0, next = 0;
     int nested = 0;
@@ -78,7 +80,7 @@ const algebra::Polynode<R>* Input::InputHandler<R>::parse_polynode(const std::st
 
         std::unordered_map<algebra::NodeHash, int> mono_factors;
 
-        const algebra::Polynode<R>* term = this->node_store_.one_p();
+        const algebra::Polynode<R>* term = node_store_.one_p();
 
         // Next, tokenize the factors
         while (cur < next) {
@@ -98,7 +100,7 @@ const algebra::Polynode<R>* Input::InputHandler<R>::parse_polynode(const std::st
                     throw std::invalid_argument("Failed to parse expression '" + input + 
                             "'. Unable to parse '" + input.substr(last, cur - last) + "', treated as variable.");
                 }
-                mono_factors[this->node_store_.node(var)->hash]++;
+                mono_factors[node_store_.node(var)->hash]++;
             // f(polynode), so we must recurse
             } else if (input[last] == 'f') {
                 cur++;
@@ -116,8 +118,8 @@ const algebra::Polynode<R>* Input::InputHandler<R>::parse_polynode(const std::st
                 //std::cerr << " Function: " << last << " " << cur << " " << input.substr(last, cur - last) << std::endl;
                 
                 std::string sub_polynode = input.substr(last + 2, cur - last - 3);
-                mono_factors[this->node_store_.node(
-                                this->parse_polynode(sub_polynode)->hash
+                mono_factors[node_store_.node(
+                                parse_polynode(sub_polynode)->hash
                              )->hash]++;
             // (polynode), again we must recurse
             } else if (input[last] == '(') {
@@ -130,13 +132,13 @@ const algebra::Polynode<R>* Input::InputHandler<R>::parse_polynode(const std::st
                 }
 
                 std::string sub_polynode = input.substr(last + 1, cur - last - 2);
-                term = *term * *this->parse_polynode(sub_polynode);
+                term = *term * *parse_polynode(sub_polynode);
             } else {
                 throw std::invalid_argument("Failed to parse expression '" + input + 
                         "'. Invalid factor starting with '" + input[last] + "'.");
             }
         }
-        term = *term * *this->node_store_.polynode({{ this->node_store_.mononode(mono_factors)->hash, coeff }});
+        term = *term * *node_store_.polynode({{ node_store_.mononode(mono_factors)->hash, coeff }});
         ans = *ans + *term;
 
         last = next;
@@ -166,16 +168,16 @@ bool Input::InputHandler<R>::eval(std::string &cmd, std::string &rest) {
             size_t last = 0, next;
             do {
                 next = rest.find_first_of('=', last);
-                parts.push_back(this->parse_polynode(rest.substr(last, next)));
+                parts.push_back(parse_polynode(rest.substr(last, next)));
 
                 last = next + 1;
             } while (next != std::string::npos);
 
             if (parts.size() == 1) {
-                this->hypotheses_.push_back(parts[0]);
+                hypotheses_.push_back(parts[0]);
             } else {
                 for (size_t i = 1; i < parts.size(); i++) {
-                    this->hypotheses_.push_back(*parts[i] - *parts[0]);
+                    hypotheses_.push_back(*parts[i] - *parts[0]);
                 }
             }
 
@@ -187,7 +189,7 @@ bool Input::InputHandler<R>::eval(std::string &cmd, std::string &rest) {
             size_t split = rest.find_first_of(' ');
 
             int hypo = std::stoi(rest.substr(last + 1, split));
-            const algebra::Polynode<R>* primal = this->hypotheses_.at(hypo - 1);
+            const algebra::Polynode<R>* primal = hypotheses_.at(hypo - 1);
 
             last = split + 1;
             if (rest.at(last) != 'x') throw std::invalid_argument("Invalid sub command '" + rest + "'");
@@ -200,8 +202,8 @@ bool Input::InputHandler<R>::eval(std::string &cmd, std::string &rest) {
             std::string polynode_str = rest.substr(last);
             clean(polynode_str);
 
-            this->hypotheses_.push_back(primal->sub(
-                        var, *this->parse_polynode(polynode_str)
+            hypotheses_.push_back(primal->sub(
+                        var, *parse_polynode(polynode_str)
                     ));
             break;
         }
@@ -211,15 +213,15 @@ bool Input::InputHandler<R>::eval(std::string &cmd, std::string &rest) {
             size_t split = rest.find_first_of(' ');
 
             int hypo = std::stoi(rest.substr(last + 1, split));
-            const algebra::Polynode<R>* primal = this->hypotheses_.at(hypo - 1);
+            const algebra::Polynode<R>* primal = hypotheses_.at(hypo - 1);
 
             last = split + 1;
 
             std::string polynode_str = rest.substr(last);
             clean(polynode_str);
 
-            this->hypotheses_.push_back(primal->apply_func(
-                        *this->parse_polynode(polynode_str)
+            hypotheses_.push_back(primal->apply_func(
+                        *parse_polynode(polynode_str)
                     ));
             break;
         }
@@ -242,7 +244,7 @@ bool Input::InputHandler<R>::handle_line(const std::string &input, int& line) {
         return eval(cmd, rest);
     } catch (const std::exception &e) {
         line--;
-        this->err_ << " Error: " << e.what() << std::endl;
+        err_ << " Error: " << e.what() << std::endl;
     } 
     return false;
 }
@@ -250,45 +252,181 @@ bool Input::InputHandler<R>::handle_line(const std::string &input, int& line) {
 template<class R>
 Input::InputHandler<R>::InputHandler(std::istream &in, std::ostream &out, std::ostream &err, Arg opt) :
     in_(in), out_(out), err_(err), opt_(opt) {
-    this->node_store_ = algebra::NodeStore<R>();
+    node_store_ = algebra::NodeStore<R>();
+}
+
+template<class R>
+void Input::InputHandler<R>::take_input() {
+    std::string input;
+    int idx = 1;
+    do {
+        if (opt_.pretty) out_ << "h" << idx << ": " << std::flush;
+        std::getline(in_, input);
+    } while (!handle_line(input, idx));
+
+}
+
+template<class R>
+void Input::InputHandler<R>::echo_hypotheses() const {
+    if (opt_.pretty) out_ << "Hypotheses:" << std::endl;
+    int idx = 1;
+    for (const algebra::Polynode<R>* const h : hypotheses_) {
+        if(opt_.pretty) out_ << "h" << idx++ << ": ";
+        out_ << h->to_string() << std::endl;
+    }
+}
+
+template<class R>
+void Input::InputHandler<R>::echo_rand_hypotheses() {
+    randomize::Randomizer<R> randomizer(node_store_);
+
+    if (opt_.pretty) out_ << "Randomized hypotheses:" << std::endl;
+    int idx = 1;
+    for (const algebra::Polynode<R>* const h : hypotheses_) {
+        if(opt_.pretty) out_ << "h" << idx++ << ": ";
+        out_ << randomizer.to_random_string(*h, true) << std::endl;
+    }
+}
+
+// Quick and dirty function to get the variables in a polynode
+// TODO: make this better
+template<class R>
+std::set<algebra::Idx> get_vars(const algebra::Polynode<R>& p, algebra::NodeStore<R> &node_store) {
+    std::set<algebra::Idx> vars;
+
+    for (const auto& term : p) {
+        for (const auto &node : *node_store.get_mononode(term.first)) {
+            const algebra::Node<R>* nptr = node_store.get_node(node.first);
+
+            switch (nptr->get_type()) {
+                case algebra::NodeType::VAR: {
+                    vars.insert(nptr->get_var());
+                    break;
+                }
+                case algebra::NodeType::POL: {
+                    std::set<algebra::Idx> v = get_vars(*node_store.get_polynode(nptr->get_polynode_hash()), node_store);
+                    vars.insert(v.begin(), v.end());
+                }
+            }
+        }
+    }
+    return vars;
+}
+
+template<class R>
+void Input::InputHandler<R>::clean_hypotheses() {
+    // Remove duplicates
+    std::set<const algebra::Polynode<R>*> reduced_hypotheses(hypotheses_.begin(), hypotheses_.end());
+    // Delete zeros
+    auto it = reduced_hypotheses.find(node_store_.zero_p());
+    if (it != reduced_hypotheses.end()) reduced_hypotheses.erase(it);
+    hypotheses_ = std::vector<const algebra::Polynode<R>*>(reduced_hypotheses.begin(), reduced_hypotheses.end());
+}
+
+template<class R>
+void Input::InputHandler<R>::prepare_hypotheses() {
+    clean_hypotheses();
+
+    // Substitute zeros
+    if (opt_.simplify >= 1) {
+        std::vector<const algebra::Polynode<R>*> sub_zero;
+        for (const algebra::Polynode<R>* h : hypotheses_) {
+            // Again slow, but that's ok (probably). TODO
+            std::set<algebra::Idx> vars = get_vars(*h, node_store_);
+
+            for (int mask = 1; mask < (1 << vars.size()); mask++) {
+                int mask_copy = mask;
+                std::unordered_set<algebra::Idx> zero_out;
+                zero_out.reserve(vars.size());
+                for (const algebra::Idx v : vars) {
+                    if (mask_copy & 1) {
+                        zero_out.insert(v);
+                    } 
+                    mask_copy >>= 1;
+                }   
+                sub_zero.push_back(h->subs_zero(zero_out));
+            }
+        }
+        
+        hypotheses_.insert(hypotheses_.end(), sub_zero.begin(), sub_zero.end());
+        clean_hypotheses();
+    }
+    // Permute the variables (and "push" them down to the n smallest indexes)
+    if (opt_.simplify >= 2) {
+        std::vector<const algebra::Polynode<R>*> permuted;
+        for (const algebra::Polynode<R>* h : hypotheses_) {
+            // Again slow, but that's ok (probably). TODO
+            std::set<algebra::Idx> vars_set = get_vars(*h, node_store_);
+            std::vector<algebra::Idx> vars_idx(vars_set.begin(), vars_set.end());
+            std::vector<algebra::Idx> new_idx(vars_set.size()); 
+            std::iota(new_idx.begin(), new_idx.end(), 1);
+
+            do {
+                std::unordered_map<algebra::Idx, algebra::Idx> replace;
+                replace.reserve(vars_idx.size());
+                
+                for (size_t i = 0; i < vars_idx.size(); i++) {
+                    replace[vars_idx[i]] = new_idx[i];
+                }
+
+                permuted.push_back(h->subs_var(replace));
+            } while (std::next_permutation(new_idx.begin(), new_idx.end()));
+        }
+        
+        hypotheses_.insert(hypotheses_.end(), permuted.begin(), permuted.end());
+        clean_hypotheses();
+    }
+
+    if (opt_.pretty) out_ << "Substituted to obtain the following hypotheses (simplification level = " << 
+        opt_.simplify << "):" << std::endl;
+    else out_ << std::endl;
+    int idx = 1;
+    for (const algebra::Polynode<R>* const h : hypotheses_) {
+        if(opt_.pretty) out_ << "s" << idx++ << ": ";
+        out_ << h->to_string() << std::endl;
+    }
+}
+
+template<class R>
+void Input::InputHandler<R>::calc_groebner() {
+    if (opt_.pretty) out_ << "Calculating Groebner basis ..." << std::endl;
+    groebner::Reducer<R> reducer(hypotheses_, node_store_);
+    bool finished = reducer.calculate_reduced_gbasis(opt_.simplify_timeout);
+    std::vector<const algebra::Polynode<R>*> gbasis = reducer.get_polys();
+    std::sort(gbasis.begin(), gbasis.end(), [](const algebra::Polynode<R>* a, const algebra::Polynode<R>* b) {
+                return a->stats.weight < b->stats.weight;
+            });
+
+    if (opt_.pretty) {
+        if (finished) {
+            out_ << "Finished." << std::endl;
+            out_ << "Reduced Groebner basis:" << std::endl;
+        } else {
+            out_ << "Terminated after " << opt_.simplify_timeout << "ms." << std::endl;
+            out_ << "Reduced partial Groebner basis:" << std::endl;
+        }
+    } 
+    else out_ << std::endl;
+    int idx = 1;
+    for (const algebra::Polynode<R>* const h : gbasis) {
+        if(opt_.pretty) out_ << "b" << idx++ << " ";
+        out_ << "[" << h->stats << "]";
+        if (opt_.pretty) out_ << ":";
+        out_ << " ";
+        out_ << h->to_string() << std::endl;
+    }
 }
 
 template<class R>
 void Input::InputHandler<R>::handle_input() {
-    std::string input;
-    int idx = 1;
-    do {
-        if (opt_.pretty) this->out_ << "h" << idx << ": " << std::flush;
-        std::getline(this->in_, input);
-    } while (!handle_line(input, idx));
+    take_input();
+    echo_hypotheses();
 
-    randomize::Randomizer<R> randomizer(this->node_store_);
+    if (opt_.randomize) echo_rand_hypotheses();
 
-    if (opt_.pretty) this->out_ << "Hypotheses:" << std::endl;
-    idx = 1;
-    for (const algebra::Polynode<R>* const h : this->hypotheses_) {
-        if(opt_.pretty) this->out_ << "h" << idx++ << ": ";
-        this->out_ << (opt_.randomize ? randomizer.to_random_string(*h, true) : h->to_string()) << std::endl;
-    }
-
-    if (!opt_.groebner) return;
-    
-    // Remove duplicates
-    std::set<const algebra::Polynode<R>*> reduced_hypotheses(this->hypotheses_.begin(), this->hypotheses_.end());
-    // Delete zeros
-    auto it = reduced_hypotheses.find(this->node_store_.zero_p());
-    if (it != reduced_hypotheses.end()) reduced_hypotheses.erase(it);
-    this->hypotheses_ = std::vector<const algebra::Polynode<R>*>(reduced_hypotheses.begin(), reduced_hypotheses.end());
-
-    groebner::Reducer<R> reducer(this->node_store_);
-    std::vector<const algebra::Polynode<R>*> gbasis = reducer.reduced_basis(this->hypotheses_);
-
-    if (opt_.pretty) this->out_ << "Reduced Groebner basis:" << std::endl;
-    else this->out_ << std::endl;
-    idx = 1;
-    for (const algebra::Polynode<R>* const h : gbasis) {
-        if(opt_.pretty) this->out_ << "b" << idx++ << ": ";
-        this->out_ << h->to_string() << std::endl;
+    if (opt_.groebner) {
+        prepare_hypotheses();
+        calc_groebner();
     }
 }
 

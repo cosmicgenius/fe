@@ -1,5 +1,5 @@
 CC = g++
-CFLAGS = -pedantic -Wall -Wextra -lgmp -lgmpxx -g 
+CFLAGS = -pedantic -Wall -Wextra -lgmp -lgmpxx -g -pg
 OPTFLAGS = -O3
 
 main: obj/main.o obj/input.o obj/groebner.o obj/randomize.o obj/algebra.o
