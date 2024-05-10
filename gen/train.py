@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")) # Stupid python
 
-from config import train_path, val_path, meta_path, models_path, parse_args, TrainConfig, train_configs
+from config import train_fe_path, val_fe_path, meta_path, models_path, parse_args, TrainConfig, train_configs
 from train_base import train
 
 def main():
@@ -15,7 +15,7 @@ def main():
     else:
         config = TrainConfig(**args)
 
-    train(config, train_path, val_path, meta_path, models_path)
+    train(config, train_fe_path, val_fe_path, meta_path, models_path)
 
 if __name__ == '__main__':
     main()

@@ -12,7 +12,7 @@ import numpy as np
 import itertools
 from collections import Counter
 
-from config import rand_path, train_path, val_path, meta_path, TokenizeConfig, parse_args
+from config import rand_path, train_fe_path, val_fe_path, meta_path, TokenizeConfig, parse_args
 
 max_vocab_size = 64
 
@@ -128,8 +128,8 @@ def main():
     # Export to files
     train_ids = np.array(train_ids, dtype=np.uint16)
     val_ids = np.array(val_ids, dtype=np.uint16)
-    train_ids.tofile(train_path)
-    val_ids.tofile(val_path)
+    train_ids.tofile(train_fe_path)
+    val_ids.tofile(val_fe_path)
 
     with open(meta_path, 'wb') as f:
         pickle.dump(meta, f)

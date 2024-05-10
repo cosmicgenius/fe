@@ -12,14 +12,16 @@ raw_paths = [os.path.join(dirname, 'data', name) for name
 clean_path = os.path.join(dirname, 'data', "clean-fe.txt") 
 rand_path = os.path.join(dirname, 'data', "rand-fe.txt")
 
-train_path = os.path.join(dirname, 'data', "train-fe.bin")
-val_path = os.path.join(dirname, 'data', "val-fe.bin")
+train_fe_path = os.path.join(dirname, 'data', "train-fe.bin")
+val_fe_path = os.path.join(dirname, 'data', "val-fe.bin")
 meta_path = os.path.join(dirname, 'data', "meta.pkl")
 
 models_path = os.path.join(dirname, 'models')
 
 gen_path = os.path.join(dirname, 'data', 'gen-fe.txt')
 filtered_path = os.path.join(dirname, 'data', 'filtered-fe.txt')
+
+rand_tac_path = os.path.join(dirname, 'data', 'rand-tac.txt')
 
 @dataclass
 class TokenizeConfig:
