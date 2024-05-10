@@ -12,7 +12,7 @@ from gpt import GPT
 from config import GPTConfig, GenConfig
 from tokenize_base import bpe_replace
 
-def generate(config: GenConfig, meta_path, gen_path, models_path):
+def generate(config: GenConfig, meta_path, gen_path: str | None, models_path):
     print("Set configuration:")
     for k, v in config.__dict__.items():
         print(f"{k} = {v!r}")
@@ -118,6 +118,9 @@ def generate(config: GenConfig, meta_path, gen_path, models_path):
             (out[i].split('\n')[:lines[i]]) for i in range(batch_size)
         ))[:config.num_lines]
 
-    with open(gen_path, 'a') as f:
-        f.write('\n'.join(lines))
-    print(f"Wrote {len(lines)} lines to {gen_path}")
+    if gen_path is None:
+        print('\n'.join(lines))
+    else:
+        with open(gen_path, 'a') as f:
+            f.write('\n'.join(lines))
+        print(f"Wrote {len(lines)} lines to {gen_path}")
