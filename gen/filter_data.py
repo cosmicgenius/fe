@@ -1,4 +1,6 @@
-# Filters out unparsable or "easy" GPT generated FEs
+"""
+Filters out unparsable or "easy" GPT generated FEs
+"""
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")) # Stupid python
@@ -6,14 +8,14 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")) 
 import re
 import time
 from subprocess import Popen, PIPE, TimeoutExpired, DEVNULL
-from config import build_path, gen_path, filtered_path
+from config import build_path, gen_fe_path, filtered_fe_path
 
 stat_regex = re.compile(r'\[w=(\d+),nw=(\d+),d=(\d+),la=(\d+)\]')
 eval_period = 100
 
 def main():
     gen = []
-    with open(gen_path, 'r', encoding="utf-8") as f:
+    with open(gen_fe_path, 'r', encoding="utf-8") as f:
         gen += f.readlines()
     
     print(f"Read {len(gen)} lines of clean data")
@@ -45,7 +47,7 @@ def main():
 
     print(f"Filtered to {len(filtered)} lines")
 
-    with open(filtered_path, 'w', encoding="utf-8") as f:
+    with open(filtered_fe_path, 'w', encoding="utf-8") as f:
         f.write(''.join(filtered))
 
 if __name__ == '__main__':

@@ -7,25 +7,30 @@ from typing import Any
 dirname = os.path.dirname(os.path.abspath(__file__))
 
 build_path = os.path.join(dirname, "build", "main")
-raw_paths = [os.path.join(dirname, 'data', name) for name 
+models_path = os.path.join(dirname, 'models')
+
+raw_fe_paths = [os.path.join(dirname, 'data', name) for name 
                 in os.listdir(os.path.join(dirname, 'data')) if name.startswith("raw")]
-clean_path = os.path.join(dirname, 'data', "clean-fe.txt") 
-rand_path = os.path.join(dirname, 'data', "rand-fe.txt")
+clean_fe_path = os.path.join(dirname, 'data', "clean-fe.txt") 
+rand_fe_path = os.path.join(dirname, 'data', "rand-fe.txt")
 
 train_fe_path = os.path.join(dirname, 'data', "train-fe.bin")
 val_fe_path = os.path.join(dirname, 'data', "val-fe.bin")
-meta_path = os.path.join(dirname, 'data', "meta.pkl")
+meta_fe_path = os.path.join(dirname, 'data', "meta-fe.pkl")
 
-models_path = os.path.join(dirname, 'models')
-
-gen_path = os.path.join(dirname, 'data', 'gen-fe.txt')
-filtered_path = os.path.join(dirname, 'data', 'filtered-fe.txt')
+gen_fe_path = os.path.join(dirname, 'data', 'gen-fe.txt')
+filtered_fe_path = os.path.join(dirname, 'data', 'filtered-fe.txt')
 
 rand_tac_path = os.path.join(dirname, 'data', 'rand-tac.txt')
 
+train_tac_path = os.path.join(dirname, 'data', "train-tac.bin")
+val_tac_path = os.path.join(dirname, 'data', "val-tac.bin")
+meta_tac_path = os.path.join(dirname, 'data', "meta-tac.pkl")
+
 @dataclass
 class TokenizeConfig:
-    encoding: str   = 'bpe' # 'bpe' or 'char'
+    encoding: str           = 'bpe' # 'bpe' or 'char'
+    max_vocab_size: int     = 64
 
 @dataclass
 class GPTConfig:

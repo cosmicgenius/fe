@@ -2,10 +2,7 @@
 Training script based on NanoGPT: https://github.com/karpathy/nanoGPT/blob/master/train.py
 except without any DDP
 """
-import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")) # Stupid python
-
 import time
 import math
 import pickle
