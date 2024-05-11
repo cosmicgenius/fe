@@ -34,9 +34,11 @@ def main():
             for i, b in enumerate(blocks):
                 stats = [tuple(int(s) for s in m) for m in stat_regex.findall(b)]
 
-                # must parse and have no solution
-                # of the form f(a x + b) = stuff with no f's
-                if len(stats) > 0 and all(s[1] != 2 for s in stats):
+                # must,
+                # 1) parse 
+                # 2) have no solution of the form f(a x + b) = stuff with no f's
+                # 3) have some f(x)
+                if len(stats) > 0 and all(s[1] != 2 for s in stats) and not all(s[1] == 0 for s in stats):
                     filtered.add(gen[batch + i])
 
         except TimeoutExpired:
