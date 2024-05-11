@@ -19,8 +19,8 @@ bool truthy(std::string s) {
     return false;
 }
 
-Input::Arg parse_arg(int argc, char** argv) {
-    Input::Arg args;
+Input::Config parse_arg(int argc, char** argv) {
+    Input::Config config;
     
     // Support only --key=value arguments
     for (int i = 1; i < argc; i++) {
@@ -34,25 +34,31 @@ Input::Arg parse_arg(int argc, char** argv) {
         std::string val = arg.substr(split + 1);
         
         if (key == "groebner") {
-            args.groebner = truthy(val);
+            config.groebner = truthy(val);
         } else if (key == "pretty") {
-            args.pretty = truthy(val);
+            config.pretty = truthy(val);
         } else if (key == "randomize" || key == "rand") {
-            args.randomize = truthy(val);
+            config.randomize = truthy(val);
         } else if (key == "simplify" || key == "simp") {
-            args.simplify = std::stoi(val);
+            config.simplify = std::stoi(val);
         } else if (key == "simplify_timeout" || key == "simp_timeout") {
-            args.simplify_timeout = std::stoi(val);
+            config.simplify_timeout = std::stoi(val);
+        } else if (key == "batch_size") {
+            config.batch_size = std::stoi(val);
+        } else if (key == "threads") {
+            config.threads = std::stoi(val);
+        } else {
+            std::cerr << "Warninig: Unknown argument '" << key << "'" << std::endl;
         }
     }
 
-    return args;
+    return config;
 }
 
 int main(int argc, char** argv) {
-    Input::Arg arg = parse_arg(argc, argv);
+    Input::Config config = parse_arg(argc, argv);
 
-    Input::InputHandler<R> handler(std::cin, std::cout, std::cerr, arg);
+    Input::InputHandler<R> handler(std::cin, std::cout, std::cerr, config);
     handler.handle_input();
 }
 

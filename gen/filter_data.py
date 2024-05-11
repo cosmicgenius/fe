@@ -11,37 +11,43 @@ from subprocess import Popen, PIPE, TimeoutExpired, DEVNULL
 from config import build_path, gen_fe_path, filtered_fe_path
 
 stat_regex = re.compile(r'\[w=(\d+),nw=(\d+),d=(\d+),la=(\d+)\]')
-eval_period = 100
+blank_line_regex = re.compile(r'$^', flags=re.MULTILINE)
+batch_size = 100
 
 def main():
     gen = []
     with open(gen_fe_path, 'r', encoding="utf-8") as f:
-        gen += f.readlines()
+        gen = f.readlines()
     
     print(f"Read {len(gen)} lines of clean data")
 
     filtered = set()
     t0 = time.time()
-    for i, fe in enumerate(gen):
-        proc = Popen([build_path, "--pretty=false", "--simp=2", "--simp_timeout=800"], 
+    l0 = len(filtered)
+    for batch in range(0, len(gen), batch_size):
+        size = len(gen[batch:batch+batch_size])
+        proc = Popen([build_path, "--pretty=false", "--simp=2", "--simp_timeout=800", f"--batch_size={size}", "--threads=8"], 
                      encoding="utf-8", stdin=PIPE, stdout=PIPE, stderr=DEVNULL)
         try:
-            stdout, _ = proc.communicate(f"h {fe}\ne\n", timeout=1)
-            stats = [tuple(int(s) for s in m) for m in stat_regex.findall(stdout)]
+            stdout, _ = proc.communicate(''.join("h " + fe + "\ne\n" for fe in gen[batch:batch+size]), timeout=10)
+            blocks = blank_line_regex.split(stdout)[2::2] # first block is echoed hypotheses, odd blocks are simplification echoes
+            for i, b in enumerate(blocks):
+                stats = [tuple(int(s) for s in m) for m in stat_regex.findall(b)]
 
-            # must parse and have no solution
-            # of the form f(a x + b) = stuff with no f's
-            if len(stats) > 0 and all(s[1] != 2 for s in stats):
-                filtered.add(fe)
+                # must parse and have no solution
+                # of the form f(a x + b) = stuff with no f's
+                if len(stats) > 0 and all(s[1] != 2 for s in stats):
+                    filtered.add(gen[batch + i])
 
         except TimeoutExpired:
-            print(f"Number {i} taking too long; killed after 1s")
+            print(f"Batch {batch // batch_size + 1} taking too long; killed after 10s")
             proc.kill()
             stdout, _ = proc.communicate()
 
-        if (i + 1) % eval_period == 0:
-            print(f"Line {i + 1}: last {eval_period} lines took {time.time() - t0:.3f}s")
-            t0 = time.time()
+        print(f"Batch {batch // batch_size + 1} (Lines {batch + 1}-{batch + size}): " + 
+              f"Took {time.time() - t0:.3f}s and got {len(filtered) - l0} new lines")
+        t0 = time.time()
+        l0 = len(filtered)
 
     filtered = list(filtered)
 

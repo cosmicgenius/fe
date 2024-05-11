@@ -4,12 +4,26 @@
 #include "../include/input.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <iostream>
 #include <istream>
 #include <string>
 #include <set>
+#include <thread>
 #include <unordered_map>
 #include <utility>
+
+template<class R>
+Input::InputHandler<R>::InputHandler(std::istream &in, std::ostream &out, std::ostream &err, Config config) :
+    in_(in), out_(out), err_(err), config_(config) {
+    if (config.batch_size < 0) throw std::invalid_argument("Invalid number of ides");
+
+    node_stores_.resize(config_.batch_size);
+    hypotheses_.resize(config_.batch_size);
+
+    out_buffers_.resize(config_.batch_size);
+    err_buffers_.resize(config_.batch_size);
+}
 
 void clean(std::string &input) {
     // Remove spaces
@@ -39,12 +53,12 @@ mpq_class parse_coeff(const std::string &input) {
 
 // Input must be cleaned to work
 template<class R>
-const algebra::Polynode<R>* Input::InputHandler<R>::parse_polynode(const std::string &input) {
+const algebra::Polynode<R>* Input::InputHandler<R>::parse_polynode(int id, const std::string &input) {
     // The input will be of the form c1 prod1 + c2 prod + ... + ck prodk
     // where each prodi is a product of stuff that a node, or parentheses around a polynode
     // and the ci are coefficients
     size_t len = input.size();
-    const algebra::Polynode<R>* ans = node_store_.zero_p();
+    const algebra::Polynode<R>* ans = node_stores_[id].zero_p();
 
     size_t last = 0, next = 0;
     int nested = 0;
@@ -80,7 +94,7 @@ const algebra::Polynode<R>* Input::InputHandler<R>::parse_polynode(const std::st
 
         std::unordered_map<algebra::NodeHash, int> mono_factors;
 
-        const algebra::Polynode<R>* term = node_store_.one_p();
+        const algebra::Polynode<R>* term = node_stores_[id].one_p();
 
         // Next, tokenize the factors
         while (cur < next) {
@@ -100,7 +114,7 @@ const algebra::Polynode<R>* Input::InputHandler<R>::parse_polynode(const std::st
                     throw std::invalid_argument("Failed to parse expression '" + input + 
                             "'. Unable to parse '" + input.substr(last, cur - last) + "', treated as variable.");
                 }
-                mono_factors[node_store_.node(var)->hash]++;
+                mono_factors[node_stores_[id].node(var)->hash]++;
             // f(polynode), so we must recurse
             } else if (input[last] == 'f') {
                 cur++;
@@ -118,8 +132,8 @@ const algebra::Polynode<R>* Input::InputHandler<R>::parse_polynode(const std::st
                 //std::cerr << " Function: " << last << " " << cur << " " << input.substr(last, cur - last) << std::endl;
                 
                 std::string sub_polynode = input.substr(last + 2, cur - last - 3);
-                mono_factors[node_store_.node(
-                                parse_polynode(sub_polynode)->hash
+                mono_factors[node_stores_[id].node(
+                                parse_polynode(id, sub_polynode)->hash
                              )->hash]++;
             // (polynode), again we must recurse
             } else if (input[last] == '(') {
@@ -132,13 +146,13 @@ const algebra::Polynode<R>* Input::InputHandler<R>::parse_polynode(const std::st
                 }
 
                 std::string sub_polynode = input.substr(last + 1, cur - last - 2);
-                term = *term * *parse_polynode(sub_polynode);
+                term = *term * *parse_polynode(id, sub_polynode);
             } else {
                 throw std::invalid_argument("Failed to parse expression '" + input + 
                         "'. Invalid factor starting with '" + input[last] + "'.");
             }
         }
-        term = *term * *node_store_.polynode({{ node_store_.mononode(mono_factors)->hash, coeff }});
+        term = *term * *node_stores_[id].polynode({{ node_stores_[id].mononode(mono_factors)->hash, coeff }});
         ans = *ans + *term;
 
         last = next;
@@ -149,7 +163,7 @@ const algebra::Polynode<R>* Input::InputHandler<R>::parse_polynode(const std::st
 
 // Return true if end
 template<class R>
-bool Input::InputHandler<R>::eval(std::string &cmd, std::string &rest) {
+bool Input::InputHandler<R>::eval(int id, std::string &cmd, std::string &rest) {
     CMD_TYPE cmd_type;
     if (cmd == "hyp") cmd_type = CMD_TYPE::hyp;
     else if (cmd == "h") cmd_type = CMD_TYPE::hyp;
@@ -168,16 +182,16 @@ bool Input::InputHandler<R>::eval(std::string &cmd, std::string &rest) {
             size_t last = 0, next;
             do {
                 next = rest.find_first_of('=', last);
-                parts.push_back(parse_polynode(rest.substr(last, next)));
+                parts.push_back(parse_polynode(id, rest.substr(last, next)));
 
                 last = next + 1;
             } while (next != std::string::npos);
 
             if (parts.size() == 1) {
-                hypotheses_.push_back(parts[0]);
+                hypotheses_[id].push_back(parts[0]);
             } else {
                 for (size_t i = 1; i < parts.size(); i++) {
-                    hypotheses_.push_back(*parts[i] - *parts[0]);
+                    hypotheses_[id].push_back(*parts[i] - *parts[0]);
                 }
             }
 
@@ -189,7 +203,7 @@ bool Input::InputHandler<R>::eval(std::string &cmd, std::string &rest) {
             size_t split = rest.find_first_of(' ');
 
             int hypo = std::stoi(rest.substr(last + 1, split));
-            const algebra::Polynode<R>* primal = hypotheses_.at(hypo - 1);
+            const algebra::Polynode<R>* primal = hypotheses_[id].at(hypo - 1);
 
             last = split + 1;
             if (rest.at(last) != 'x') throw std::invalid_argument("Invalid sub command '" + rest + "'");
@@ -202,8 +216,8 @@ bool Input::InputHandler<R>::eval(std::string &cmd, std::string &rest) {
             std::string polynode_str = rest.substr(last);
             clean(polynode_str);
 
-            hypotheses_.push_back(primal->sub(
-                        var, *parse_polynode(polynode_str)
+            hypotheses_[id].push_back(primal->sub(
+                        var, *parse_polynode(id, polynode_str)
                     ));
             break;
         }
@@ -213,15 +227,15 @@ bool Input::InputHandler<R>::eval(std::string &cmd, std::string &rest) {
             size_t split = rest.find_first_of(' ');
 
             int hypo = std::stoi(rest.substr(last + 1, split));
-            const algebra::Polynode<R>* primal = hypotheses_.at(hypo - 1);
+            const algebra::Polynode<R>* primal = hypotheses_[id].at(hypo - 1);
 
             last = split + 1;
 
             std::string polynode_str = rest.substr(last);
             clean(polynode_str);
 
-            hypotheses_.push_back(primal->apply_func(
-                        *parse_polynode(polynode_str)
+            hypotheses_[id].push_back(primal->apply_func(
+                        *parse_polynode(id, polynode_str)
                     ));
             break;
         }
@@ -233,7 +247,7 @@ bool Input::InputHandler<R>::eval(std::string &cmd, std::string &rest) {
 
 // Return true if end
 template<class R>
-bool Input::InputHandler<R>::handle_line(const std::string &input, int& line) {
+bool Input::InputHandler<R>::handle_line(int id, const std::string &input, int& line) {
     size_t split = input.find(" ");
 
     std::string cmd = input.substr(0, split);
@@ -241,7 +255,7 @@ bool Input::InputHandler<R>::handle_line(const std::string &input, int& line) {
 
     line++;
     try {
-        return eval(cmd, rest);
+        return eval(id, cmd, rest);
     } catch (const std::exception &e) {
         line--;
         err_ << " Error: " << e.what() << std::endl;
@@ -250,41 +264,35 @@ bool Input::InputHandler<R>::handle_line(const std::string &input, int& line) {
 }
 
 template<class R>
-Input::InputHandler<R>::InputHandler(std::istream &in, std::ostream &out, std::ostream &err, Arg opt) :
-    in_(in), out_(out), err_(err), opt_(opt) {
-    node_store_ = algebra::NodeStore<R>();
-}
-
-template<class R>
-void Input::InputHandler<R>::take_input() {
+void Input::InputHandler<R>::take_input(int id) {
     std::string input;
     int idx = 1;
     do {
-        if (opt_.pretty) out_ << "h" << idx << ": " << std::flush;
+        // Needs to print immediately, so no buffers
+        if (config_.pretty) out_ << "h" << idx << ": " << std::flush;
         std::getline(in_, input);
-    } while (!handle_line(input, idx));
-
+    } while (!handle_line(id, input, idx));
 }
 
 template<class R>
-void Input::InputHandler<R>::echo_hypotheses() const {
-    if (opt_.pretty) out_ << "Hypotheses:" << std::endl;
+void Input::InputHandler<R>::echo_hypotheses(int id) {
+    if (config_.pretty) out_buffers_[id] << "Hypotheses:" << std::endl;
     int idx = 1;
-    for (const algebra::Polynode<R>* const h : hypotheses_) {
-        if(opt_.pretty) out_ << "h" << idx++ << ": ";
-        out_ << h->to_string() << std::endl;
+    for (const algebra::Polynode<R>* const h : hypotheses_[id]) {
+        if(config_.pretty) out_buffers_[id] << "h" << idx++ << ": ";
+        out_buffers_[id] << h->to_string() << std::endl;
     }
 }
 
 template<class R>
-void Input::InputHandler<R>::echo_rand_hypotheses() {
-    randomize::Randomizer<R> randomizer(node_store_);
+void Input::InputHandler<R>::echo_rand_hypotheses(int id) {
+    randomize::Randomizer<R> randomizer(node_stores_[id]);
 
-    if (opt_.pretty) out_ << "Randomized hypotheses:" << std::endl;
+    if (config_.pretty) out_buffers_[id] << "Randomized hypotheses:" << std::endl;
     int idx = 1;
-    for (const algebra::Polynode<R>* const h : hypotheses_) {
-        if(opt_.pretty) out_ << "h" << idx++ << ": ";
-        out_ << randomizer.to_random_string(*h, true) << std::endl;
+    for (const algebra::Polynode<R>* const h : hypotheses_[id]) {
+        if(config_.pretty) out_buffers_[id] << "h" << idx++ << ": ";
+        out_buffers_[id] << randomizer.to_random_string(*h, true) << std::endl;
     }
 }
 
@@ -314,25 +322,25 @@ std::set<algebra::Idx> get_vars(const algebra::Polynode<R>& p, algebra::NodeStor
 }
 
 template<class R>
-void Input::InputHandler<R>::clean_hypotheses() {
+void Input::InputHandler<R>::clean_hypotheses(int id) {
     // Remove duplicates
-    std::set<const algebra::Polynode<R>*> reduced_hypotheses(hypotheses_.begin(), hypotheses_.end());
+    std::set<const algebra::Polynode<R>*> reduced_hypotheses(hypotheses_[id].begin(), hypotheses_[id].end());
     // Delete zeros
-    auto it = reduced_hypotheses.find(node_store_.zero_p());
+    auto it = reduced_hypotheses.find(node_stores_[id].zero_p());
     if (it != reduced_hypotheses.end()) reduced_hypotheses.erase(it);
-    hypotheses_ = std::vector<const algebra::Polynode<R>*>(reduced_hypotheses.begin(), reduced_hypotheses.end());
+    hypotheses_[id] = std::vector<const algebra::Polynode<R>*>(reduced_hypotheses.begin(), reduced_hypotheses.end());
 }
 
 template<class R>
-void Input::InputHandler<R>::prepare_hypotheses() {
-    clean_hypotheses();
+void Input::InputHandler<R>::prepare_hypotheses(int id) {
+    clean_hypotheses(id);
 
     // Substitute zeros
-    if (opt_.simplify >= 1) {
+    if (config_.simplify >= 1) {
         std::vector<const algebra::Polynode<R>*> sub_zero;
-        for (const algebra::Polynode<R>* h : hypotheses_) {
+        for (const algebra::Polynode<R>* h : hypotheses_[id]) {
             // Again slow, but that's ok (probably). TODO
-            std::set<algebra::Idx> vars = get_vars(*h, node_store_);
+            std::set<algebra::Idx> vars = get_vars(*h, node_stores_[id]);
 
             for (int mask = 1; mask < (1 << vars.size()); mask++) {
                 int mask_copy = mask;
@@ -348,15 +356,15 @@ void Input::InputHandler<R>::prepare_hypotheses() {
             }
         }
         
-        hypotheses_.insert(hypotheses_.end(), sub_zero.begin(), sub_zero.end());
-        clean_hypotheses();
+        hypotheses_[id].insert(hypotheses_[id].end(), sub_zero.begin(), sub_zero.end());
+        clean_hypotheses(id);
     }
     // Permute the variables (and "push" them down to the n smallest indexes)
-    if (opt_.simplify >= 2) {
+    if (config_.simplify >= 2) {
         std::vector<const algebra::Polynode<R>*> permuted;
-        for (const algebra::Polynode<R>* h : hypotheses_) {
+        for (const algebra::Polynode<R>* h : hypotheses_[id]) {
             // Again slow, but that's ok (probably). TODO
-            std::set<algebra::Idx> vars_set = get_vars(*h, node_store_);
+            std::set<algebra::Idx> vars_set = get_vars(*h, node_stores_[id]);
             std::vector<algebra::Idx> vars_idx(vars_set.begin(), vars_set.end());
             std::vector<algebra::Idx> new_idx(vars_set.size()); 
             std::iota(new_idx.begin(), new_idx.end(), 1);
@@ -373,61 +381,117 @@ void Input::InputHandler<R>::prepare_hypotheses() {
             } while (std::next_permutation(new_idx.begin(), new_idx.end()));
         }
         
-        hypotheses_.insert(hypotheses_.end(), permuted.begin(), permuted.end());
-        clean_hypotheses();
+        hypotheses_[id].insert(hypotheses_[id].end(), permuted.begin(), permuted.end());
+        clean_hypotheses(id);
     }
 
-    if (opt_.pretty) out_ << "Substituted to obtain the following hypotheses (simplification level = " << 
-        opt_.simplify << "):" << std::endl;
-    else out_ << std::endl;
+    if (config_.pretty) out_buffers_[id] << "Substituted to obtain the following hypotheses (simplification level = " << 
+        config_.simplify << "):" << std::endl;
+    else out_buffers_[id] << std::endl;
     int idx = 1;
-    for (const algebra::Polynode<R>* const h : hypotheses_) {
-        if(opt_.pretty) out_ << "s" << idx++ << ": ";
-        out_ << h->to_string() << std::endl;
+    for (const algebra::Polynode<R>* const h : hypotheses_[id]) {
+        if(config_.pretty) out_buffers_[id] << "s" << idx++ << ": ";
+        out_buffers_[id] << h->to_string() << std::endl;
     }
 }
 
 template<class R>
-void Input::InputHandler<R>::calc_groebner() {
-    if (opt_.pretty) out_ << "Calculating Groebner basis ..." << std::endl;
-    groebner::Reducer<R> reducer(hypotheses_, node_store_);
-    bool finished = reducer.calculate_reduced_gbasis(opt_.simplify_timeout);
+void Input::InputHandler<R>::calc_groebner(int id) {
+    if (config_.pretty) out_buffers_[id] << "Calculating Groebner basis ..." << std::endl;
+    groebner::Reducer<R> reducer(hypotheses_[id], node_stores_[id]);
+    bool finished = reducer.calculate_reduced_gbasis(config_.simplify_timeout);
     std::vector<const algebra::Polynode<R>*> gbasis = reducer.get_polys();
     std::sort(gbasis.begin(), gbasis.end(), [](const algebra::Polynode<R>* a, const algebra::Polynode<R>* b) {
                 return a->stats.weight < b->stats.weight;
             });
 
-    if (opt_.pretty) {
+    if (config_.pretty) {
         if (finished) {
-            out_ << "Finished." << std::endl;
-            out_ << "Reduced Groebner basis:" << std::endl;
+            out_buffers_[id] << "Finished." << std::endl;
+            out_buffers_[id] << "Reduced Groebner basis:" << std::endl;
         } else {
-            out_ << "Terminated after " << opt_.simplify_timeout << "ms." << std::endl;
-            out_ << "Reduced partial Groebner basis:" << std::endl;
+            out_buffers_[id] << "Terminated after " << config_.simplify_timeout << "ms." << std::endl;
+            out_buffers_[id] << "Reduced partial Groebner basis:" << std::endl;
         }
     } 
-    else out_ << std::endl;
+    else out_buffers_[id] << std::endl;
     int idx = 1;
     for (const algebra::Polynode<R>* const h : gbasis) {
-        if(opt_.pretty) out_ << "b" << idx++ << " ";
-        out_ << "[" << h->stats << "]";
-        if (opt_.pretty) out_ << ":";
-        out_ << " ";
-        out_ << h->to_string() << std::endl;
+        if(config_.pretty) out_buffers_[id] << "b" << idx++ << " ";
+        out_buffers_[id] << "[" << h->stats << "]";
+        if (config_.pretty) out_buffers_[id] << ":";
+        out_buffers_[id] << " ";
+        out_buffers_[id] << h->to_string() << std::endl;
+    }
+}
+
+template<class R>
+void Input::InputHandler<R>::flush_buffers() {
+    for (std::stringstream &ss : out_buffers_) {
+        out_ << ss.str();
+
+        ss.clear();
+        ss.str(std::string());
+    }
+
+    for (std::stringstream &ss : err_buffers_) {
+        err_ << ss.str();
+
+        ss.clear();
+        ss.str(std::string());
     }
 }
 
 template<class R>
 void Input::InputHandler<R>::handle_input() {
-    take_input();
-    echo_hypotheses();
-
-    if (opt_.randomize) echo_rand_hypotheses();
-
-    if (opt_.groebner) {
-        prepare_hypotheses();
-        calc_groebner();
+    // Not concurrent because they come in order
+    // Also this is relatively fast, so it is ok
+    for (int id = 0; id < config_.batch_size; id++) {
+        take_input(id);
     }
+
+    // See above
+    for (int id = 0; id < config_.batch_size; id++) {
+        echo_hypotheses(id);
+    }
+    flush_buffers();
+
+    if (config_.randomize) {
+        for (int id = 0; id < config_.batch_size; id++) {
+            echo_rand_hypotheses(id);
+        }
+        flush_buffers();
+    }
+
+    if (config_.groebner) {
+        if (config_.threads > 1) {
+            std::vector<std::thread> threads;
+            std::atomic_int id{0};
+
+            auto do_work = [this] (int id) -> bool {
+                if (id >= config_.batch_size) return false;
+                
+                prepare_hypotheses(id);
+                calc_groebner(id);
+
+                return true;
+            };
+
+            for (int t_id = 0; t_id < config_.threads; t_id++) {
+                threads.push_back(std::thread([do_work, &id] () { 
+                    while (do_work(id++));
+                }));
+            }
+            for (std::thread &t : threads) t.join();
+            std::cout << "Done." << std::endl;
+        } else {
+            for (int id = 0; id < config_.batch_size; id++) {
+                prepare_hypotheses(id);
+                calc_groebner(id);
+            }
+        }
+    }
+    flush_buffers();
 }
 
 //template class Input::InputHandler<int>;
