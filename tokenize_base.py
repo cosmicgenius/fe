@@ -5,6 +5,7 @@ dirty pickling for saving
 import pickle
 import numpy as np
 import itertools
+import re
 from collections import Counter
 
 from config import TokenizeConfig
@@ -25,7 +26,8 @@ def bpe_replace(L, a, b, c):
            itertools.chain.from_iterable(L[i+2:j] + [c] for i, j in zip(replace_idx[:-1], replace_idx[1:]))) + \
            L[replace_idx[-1]+2:]
 
-def tokenize(data: str, config: TokenizeConfig):
+ws_regex = re.compile(r'\s')
+def tokenize(data: str, config: TokenizeConfig, protect_words):
     chars = sorted(list(set(data)))
     vocab_size = len(chars)
 
@@ -35,6 +37,7 @@ def tokenize(data: str, config: TokenizeConfig):
     stoi = { ch: i  for i, ch in enumerate(chars) }
     itos = { i : ch for i, ch in enumerate(chars) }
 
+    whitespace = [stoi[c] for c in chars if ws_regex.match(c) is not None]
 
     if config.encoding == 'bpe':
         enc = {}
@@ -47,7 +50,20 @@ def tokenize(data: str, config: TokenizeConfig):
 
             # slow but that's ok
             counter = Counter(zip(encoded_data[:-1], encoded_data[1:]))
-            pair, _ = counter.most_common(1)[0]
+            if protect_words:
+                pair = (0, 0)
+                for p, _ in counter.most_common():
+                    works = True
+                    for ws in whitespace:
+                        if ws in p:
+                            works = False
+                            break
+                    if works:
+                        pair = p
+                        break
+
+            else:
+                pair, _ = counter.most_common(1)[0]
 
             enc[vocab_size] = pair
             dec.append(dec[pair[0]] + dec[pair[1]])
@@ -103,13 +119,13 @@ def tokenize(data: str, config: TokenizeConfig):
 
     return train_ids, val_ids, meta
 
-def tokenize_file(config: TokenizeConfig, input_path, train_path, val_path, meta_path):
+def tokenize_file(config: TokenizeConfig, input_path, train_path, val_path, meta_path, protect_words=False):
     data = ""
     with open(input_path, 'r') as f:
         data = f.read()
     print(f"Total number of characters in dataset: {len(data):,}")
 
-    train_ids, val_ids, meta = tokenize(data, config)
+    train_ids, val_ids, meta = tokenize(data, config, protect_words)
     vocab_size = meta['vocab_size']
 
     print(f"Final vocab size: {vocab_size:,}")

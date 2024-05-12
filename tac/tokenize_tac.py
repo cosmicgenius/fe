@@ -7,7 +7,7 @@ from tokenize_base import tokenize_file
 
 def main():
     config = TokenizeConfig(**parse_args())
-    tokenize_file(config, rand_tac_path, train_tac_path, val_tac_path, meta_tac_path)
+    tokenize_file(config, rand_tac_path, train_tac_path, val_tac_path, meta_tac_path, protect_words=True)
 
 if __name__ == '__main__':
     main()
