@@ -203,6 +203,33 @@ class GPT(nn.Module):
 
         return logits, loss
 
+    def forward_until_tok(self, idx, tok):
+        """
+        Take a conditioning sequence of indices idx (LongTensor of shape (B, T)) and repeatedly
+        complete until every sequence has a particular token
+        """
+        done = [False] * idx.size(0)
+        last_logits = torch.empty((idx.size(0)), device=idx.device)
+        while not all(done):
+            # if the sequence context is growing too long we must crop it at block_size
+            idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
+            # forward the model to get the logits for the index in the sequence
+            logits, _ = self(idx_cond)
+            logits = logits[:, -1, :]
+            # apply softmax to convert logits to (normalized) probabilities
+            probs = F.softmax(logits, dim=-1)
+            # sample from the distribution
+            idx_next = torch.multinomial(probs, num_samples=1)
+            for b, nidx in enumerate(idx_next):
+                if not done[b]:
+                    done[b] = (nidx == tok)
+                    last_logits[b] = torch.log(probs[b, nidx])
+            
+            # append sampled index to the running sequence and continue
+            idx = torch.cat((idx, idx_next), dim=1)
+
+        return idx, last_logits
+
     @torch.no_grad()
     def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
         """

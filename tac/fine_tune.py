@@ -1,22 +1,30 @@
 """
-Training script based on NanoGPT: https://github.com/karpathy/nanoGPT/blob/master/train.py
-except without any DDP
+Fine tune the tac language model
 """
+import sys
 import os
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")) # Stupid python
+
 import time
-import math
 import pickle
 from contextlib import nullcontext
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 import dataclasses
+import itertools
+import re
+
+from subprocess import Popen, PIPE, TimeoutExpired, DEVNULL
 
 from gpt import GPT
-from config import GPTConfig, TrainConfig
+from config import models_path, filtered_fe_path, build_path, meta_tac_path, parse_args, GPTConfig, FineTuneConfig, ft_configs
+from tokenize_base import bpe_replace
 
-def train(config: TrainConfig, train_path, val_path, meta_path, models_path):
+stat_regex = re.compile(r'\[w=(\d+),nw=(\d+),d=(\d+),la=(\d+)\]')
+blank_line_regex = re.compile(r'$^', flags=re.MULTILINE)
+
+def ftune(config: FineTuneConfig, data_path, build_path, meta_path, models_path):
     print("Set configuration:")
     for k, v in config.__dict__.items():
         print(f"{k} = {v!r}")
@@ -27,7 +35,6 @@ def train(config: TrainConfig, train_path, val_path, meta_path, models_path):
     tokens_per_iter = config.gradient_acc_steps * config.batch_size * config.block_size
     print(f"tokens per iteration will be: {tokens_per_iter:,}")
 
-    # torch.manual_seed(1434)
     torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
     torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
     device_type = 'cuda' if 'cuda' in config.device else 'cpu' # for later use in torch.autocast
@@ -35,58 +42,53 @@ def train(config: TrainConfig, train_path, val_path, meta_path, models_path):
     ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[config.dtype]
     ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype) # type: ignore
 
-    def get_batch(split):
-        # We recreate np.memmap every batch to avoid a memory leak, as per
-        # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
-        if split == 'train':
-            data = np.memmap(train_path, dtype=np.uint16, mode='r')
-        else:
-            data = np.memmap(val_path, dtype=np.uint16, mode='r')
-        ix = torch.randint(len(data) - config.block_size, (config.batch_size,))
-        x = torch.stack([torch.from_numpy((data[i:i+config.block_size]).astype(np.int64)) for i in ix])
-        y = torch.stack([torch.from_numpy((data[i+1:i+1+config.block_size]).astype(np.int64)) for i in ix])
-        if device_type == 'cuda':
-            # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
-            x, y = x.pin_memory().to(config.device, non_blocking=True), y.pin_memory().to(config.device, non_blocking=True)
-        else:
-            x, y = x.to(config.device), y.to(config.device)
-
-        return x, y
+    with open(data_path, 'r') as f:
+        data = np.array([l.strip() for l in f])
 
     # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
     iter_num = 0
-    best_val_loss = 1e9
 
     # Get information from meta file
     with open(meta_path, 'rb') as f:
         meta = pickle.load(f)
+
+    if meta['args']['encoding'] == 'bpe':
+        stoi, enc, dec = meta['stoi'], meta['enc'], meta['dec']
+        def encode(s):
+            L = [stoi[c] for c in s]
+            for k, pair in enc.items():
+                L = bpe_replace(L, pair[0], pair[1], k)
+            return L
+        def decode(l):
+            return ''.join(dec[i] for i in l)
+
+    elif meta['args']['encoding'] == 'char':
+        stoi, itos = meta['stoi'], meta['itos']
+        def encode(s):
+            return [stoi[c] for c in s]
+        def decode(l):
+            return ''.join(itos[i] for i in l)
+
+    else: 
+        raise ValueError(f"Unknown encoding {meta['args']['encoding']!r}")
+
     vocab_size: int = meta['vocab_size']
+    nl_tok: int = encode('\n')[0]
     print(f"Set vocab_size = {vocab_size}")
 
     # model init
     model_args = { f.name : getattr(config, f.name) for f in dataclasses.fields(GPTConfig) if f.name != 'vocab_size' }
     model_args['vocab_size'] = vocab_size # vocab_size comes from the data not the config
-    if config.source == 'scratch':
-        # init a new model from scratch
-        print("Initializing a new model from scratch")
-        # determine the vocab size we'll use for from-scratch training
-        # why is pyright erroring here?
-        gptconf = GPTConfig(**model_args)
-        model: GPT = GPT(gptconf)
 
-        model.to(config.device)
-
-        optimizer = model.configure_optimizers(config.weight_decay, config.learning_rate, (config.beta1, config.beta2), device_type)
-
-    elif config.source.endswith('.pt'):
+    # cant start fine tuning without a pre-trained model
+    if config.source.endswith('.pt'):
         source_path = os.path.join(models_path, config.source)
         if config.override: config.out = source_path
 
         if not os.path.exists(source_path) or not os.path.isfile(source_path):
             raise ValueError(f"File {source_path:!s} not found")
 
-        print(f"Resuming training from {source_path}")
-        # resume training from a checkpoint.
+        print(f"Fine-tuning the model at {source_path}")
         checkpoint = torch.load(source_path, map_location=config.device)
 
         # force these config attributes to be equal otherwise we can't even resume training
@@ -110,7 +112,6 @@ def train(config: TrainConfig, train_path, val_path, meta_path, models_path):
 
         model.load_state_dict(state_dict)
         iter_num = checkpoint['iter_num']
-        best_val_loss = checkpoint['best_val_loss']
 
         model.to(config.device)
 
@@ -121,9 +122,55 @@ def train(config: TrainConfig, train_path, val_path, meta_path, models_path):
     else:
         raise ValueError(f"Unknown source value {config.source:!s}")
 
-
     # initialize a GradScaler. If enabled=False scaler is a no-op
     scaler = torch.cuda.amp.GradScaler(enabled=(device_type == "cuda" and config.dtype == 'float16'))
+
+    def get_batch(prompt_char):
+        ix = np.random.randint(len(data))
+        x = torch.tensor(encode(f"h {data[ix]}\n{prompt_char} ")).repeat(config.batch_size, 1) # (B, T) for some T
+
+        if device_type == 'cuda':
+            # pin x which allows us to move them to GPU asynchronously (non_blocking=True)
+            x = x.pin_memory().to(config.device, non_blocking=True)
+        else:
+            x = x.to(config.device)
+        return x
+
+    # some heurstic reward function (negated) for on policy rl
+    def neg_reward(tl, w, nw, d, la):
+        return tl + 3 * w + 10 * nw + 2 * d * d + 0.3 * la
+
+    def total_neg_reward(block, tac):
+        # kill duplicates to stop behavior like f(x1) = x1 and f(x2) = x2 being two different things
+        rewards = sorted(set(
+            neg_reward(len(tac), *[int(s) for s in m]) 
+            for m in stat_regex.findall(block)
+        ))
+        # top 3 rewards
+        return sum(rewards[:3]) / len(rewards[:3])
+        
+
+    def get_rewards(base_prob, tacs):
+        proc = Popen([build_path, "--pretty=false", "--simp=2", "--simp_timeout=800", 
+                      f"--batch_size={config.batch_size}", "--threads=8"], 
+                     encoding="utf-8", stdin=PIPE, stdout=PIPE, stderr=DEVNULL)
+
+        try:
+            stdout, _ = proc.communicate(''.join([base_prob] + tacs), timeout=30)
+            blocks = blank_line_regex.split(stdout)[2::2] # first block is echoed hypotheses, odd blocks are simplification echoes
+
+            base_reward = total_neg_reward(blocks[0], base_prob) # calculate the reward for doing nothing, then subtract this
+                                                                 # from the other rewards to calculate the "difference"
+
+            return [total_neg_reward(b, t) - base_reward for b, t in zip(blocks, tacs)]
+
+        except TimeoutExpired:
+            # Really shouldn't happen, 30s is a lot of time
+            print(f"Batch taking too long; killed after 30s")
+            proc.kill()
+            stdout, _ = proc.communicate()
+
+        return torch.full((len(tacs),), torch.inf)
 
     # compile the model
     if config.compile:
@@ -132,49 +179,22 @@ def train(config: TrainConfig, train_path, val_path, meta_path, models_path):
         # requires PyTorch 2.0
         model: GPT = torch.compile(model) # type: ignore (complains about compiled model being a function)
 
-    # helps estimate an arbitrarily accurate loss over either split using many batches
-    @torch.no_grad()
-    def estimate_loss():
-        out = {}
-        model.eval()
-        for split in ['train', 'val']:
-            losses = torch.zeros(config.eval_iters)
-            for k in range(config.eval_iters):
-                X, Y = get_batch(split)
-                with ctx:
-                    _, loss = model(X, Y)
-                losses[k] = loss.item()
-            out[split] = losses.mean()
-        model.train()
-        return out
-
-    # learning rate decay scheduler (cosine with warmup)
-    def get_lr(it):
-        # 1) linear warmup for warmup_iters steps
-        if it < config.warmup_iters:
-            return config.learning_rate * it / config.warmup_iters
-        # 2) if it > lr_decay_iters, return min learning rate
-        if it > config.lr_decay_iters:
-            return config.min_lr
-        # 3) in between, use cosine decay down to min learning rate
-        decay_ratio = (it - config.warmup_iters) / (config.lr_decay_iters - config.warmup_iters)
-        assert 0 <= decay_ratio <= 1
-        coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
-        return config.min_lr + coeff * (config.learning_rate - config.min_lr)
-
     # training loop
-    X, Y = get_batch('train') # fetch the very first batch
+    x = get_batch(config.tactic)
     t0 = time.time()
     local_iter_num = 0 # number of iterations in the lifetime of this process
     raw_model = model
     running_mfu = -1.0
+    eps = 1e-6
+
     while True:
         # determine and set the learning rate for this iteration
-        lr = get_lr(iter_num) if config.decay_lr else config.learning_rate
+        lr = config.learning_rate
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
 
         # evaluate the loss on train/val sets and write checkpoints
+        """
         if iter_num % config.eval_interval == 0:
             losses = estimate_loss()
             print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
@@ -192,28 +212,44 @@ def train(config: TrainConfig, train_path, val_path, meta_path, models_path):
                     }
                     print(f"saving checkpoint to {out_path}")
                     torch.save(checkpoint, out_path)
-
-        if iter_num == 0 and config.eval_only:
-            break
+        """
 
         # forward backward update, with optional gradient accumulation to simulate larger batch size
         # and using the GradScaler if data type is float16
-        logits, loss = None, None
-        for micro_step in range(config.gradient_acc_steps):
+        loss = None
+        for _ in range(config.gradient_acc_steps):
             with ctx:
-                logits, loss = model(X, Y)
-                probs = F.softmax(logits, dim=-1)
-                # sample from the distribution
-                idx_next = torch.multinomial(probs, num_samples=1)
+                idx = torch.clone(x)
+                idx, last_logits = model.forward_until_tok(idx, nl_tok)
+
+                base_prob = '\n'.join(decode(x[0]).split('\n')) + '\ne\n' # remove last 
+                tacs = [
+                    decode(t[:x.shape[1]])
+                    + decode(itertools.takewhile(lambda tok: tok != nl_tok, t[x.shape[1]:]))
+                    + '\ne\n' for t in idx
+                ]
+
+                print("generated")
+
+                rewards = torch.tensor(get_rewards(base_prob, tacs)).to(device=config.device)
+                rewards = (rewards - rewards.mean()) / (rewards.std() + eps)
+
+                ex = int(torch.argmin(rewards).item())
+                print(f"Ex:\n{tacs[ex]}")
+                                       
+                loss = (rewards * last_logits).sum()
                 loss = loss / config.gradient_acc_steps # scale the loss to account for gradient accumulation
-            # immediately async prefetch next batch while model is doing the forward pass on the GPU
-            X, Y = get_batch('train')
+
+            x = get_batch(config.tactic)
+
             # backward pass, with gradient scaling if training in fp16
             scaler.scale(loss).backward()
+
         # clip the gradient
         if config.grad_clip != 0.0:
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_clip)
+
         # step the optimizer and scaler if training in fp16
         scaler.step(optimizer)
         scaler.update()
@@ -232,9 +268,26 @@ def train(config: TrainConfig, train_path, val_path, meta_path, models_path):
                 mfu = raw_model.estimate_mfu(config.batch_size * config.gradient_acc_steps, dt)
                 running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
             print(f"Iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+
         iter_num += 1
         local_iter_num += 1
 
         # termination conditions
         if iter_num > config.max_iters:
             break
+
+def main():
+    args = parse_args()
+    if 'config' in args and args['config'] is not None:
+        config = ft_configs[args['config']]
+        del args['config']
+
+        config = FineTuneConfig(**(config | args)) # type: ignore
+    else:
+        config = FineTuneConfig(**args)
+
+    ftune(config, filtered_fe_path, build_path, meta_tac_path, models_path)
+
+if __name__ == '__main__':
+    main()
+

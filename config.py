@@ -27,6 +27,9 @@ train_tac_path = os.path.join(dirname, 'data', "train-tac.bin")
 val_tac_path = os.path.join(dirname, 'data', "val-tac.bin")
 meta_tac_path = os.path.join(dirname, 'data', "meta-tac.pkl")
 
+finetune_sub_path = os.path.join(dirname, 'data', 'finetune-sub.txt')
+finetune_add_path = os.path.join(dirname, 'data', 'finetune-add.txt')
+
 @dataclass
 class TokenizeConfig:
     encoding: str           = 'bpe' # 'bpe' or 'char'
@@ -52,7 +55,7 @@ class TrainConfig:
     eval_iters: int                 = 200
     eval_only: bool                 = False # if True, script exits right after the first eval
     always_save_checkpoint: bool    = False # if True, always save a checkpoint after each eval
-    # 'scratch' or a filename ending in '.pt' that will be sourced from data/train
+    # 'scratch' or a filename ending in '.pt' that will be sourced from models/
     source: str                     = 'scratch' 
     # name of output file that will be put in data/train-ckpt, default based on start time
     out: str                        = f"model-{datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.pt" 
@@ -90,7 +93,7 @@ class TrainConfig:
     compile: bool                   = True # use PyTorch 2.0 to compile the model to be faster
 
 train_configs = {
-    'CPU': TrainConfig(
+    'CPU': dict(
         eval_interval=250,
         eval_iters=20,
         log_interval=1,
@@ -116,7 +119,7 @@ train_configs = {
         device='cpu',
         compile=False
     ),
-    'CUDA-1': TrainConfig(
+    'CUDA-1': dict(
         eval_interval=250, # keep frequent because we'll overfit
         eval_iters=200,
 
@@ -156,7 +159,88 @@ class GenConfig:
     device: str                     = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
     compile: bool                   = False
 
+@dataclass
+class FineTuneConfig:
+    source: str # filename ending in '.pt' that will be sourced from models/
+    tactic: str # 's' or 'a'
 
+    """ I/O """
+    log_interval: int               = 5
+    save_interval: int              = 25
+    always_save_checkpoint: bool    = False # if True, always save a checkpoint
+    # name of output file that will be put in data/train-ckpt, default based on start time
+    out: str                        = f"model-{datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}.pt" 
+    override: bool                  = False # override the source (i.e. set out to source) if it is a file (i.e. resuming)
+
+    """ Data """
+    gradient_acc_steps: int         = 8 # used to simulate larger batch sizes
+    batch_size: int                 = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
+    block_size: int                 = 1024
+
+    """ Model """
+    n_layer: int                    = 12
+    n_head: int                     = 12
+    n_embd: int                     = 768
+    dropout: float                  = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
+    bias: bool                      = False # do we use bias inside LayerNorm and Linear layers?
+
+    """ AdamW optimizer """
+    learning_rate: float            = 6e-4 # max learning rate
+    max_iters: int                  = 600000 # total number of training iterations
+    weight_decay: float             = 1e-1
+    beta1: float                    = 0.9
+    beta2: float                    = 0.95
+    grad_clip: float                = 1.0 # clip gradients at this value, or disable if == 0.0
+
+    """ System """
+    device: str                     = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+    dtype: str                      = 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+    compile: bool                   = True # use PyTorch 2.0 to compile the model to be faster
+
+ft_configs = {
+    'CPU': dict(
+        log_interval=1,
+        save_interval=5,
+        always_save_checkpoint=True,
+
+        gradient_acc_steps=1,
+        batch_size=12,
+        block_size=64,
+
+        n_layer=4,
+        n_head=4,
+        n_embd=128,
+        dropout=0.0,
+
+        learning_rate=1e-4,
+        max_iters=2100,
+        beta2=0.99,
+
+        device='cpu',
+        compile=False
+    ),
+    'CUDA-1': dict(
+        log_interval=5,
+        save_interval=25,
+
+        gradient_acc_steps=1,
+        batch_size=64,
+        block_size=256,
+
+        n_layer=6,
+        n_head=6,
+        n_embd=384,
+        dropout=0.2,
+
+        learning_rate=1e-4,
+        max_iters=5500,
+
+        beta2=0.99, # make a bit bigger because number of tokens per iter is small
+
+        device='cuda',
+        compile=False
+    )
+}
 # A bit sad argument parser for configs
 # Based on https://github.com/karpathy/nanoGPT/blob/master/configurator.py
 def parse_args() -> dict[str, Any]:

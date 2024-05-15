@@ -11,7 +11,7 @@ def main():
         config = train_configs[args['config']]
         del args['config']
 
-        config = TrainConfig(**(config.__dict__ | args))
+        config = TrainConfig(**(config | args)) # type: ignore
     else:
         config = TrainConfig(**args)
 
