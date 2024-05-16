@@ -245,9 +245,11 @@ void algebra::NodeStore<R>::dump() const {
     std::cout << std::flush;
 }
 
-// Puts f(polynodes) first (smaller) to allow for elimination in mononode order
-// Inside f(polynodes), it is weight order
-// Inside variables, it is lex
+/**
+ * grevlex requires reversed variable order to have x1 > x2 > ...
+ * so f(polynodes) first, in weight order,
+ * then, variables in reverse lex order
+ */
 template<class R>
 int algebra::NodeStore<R>::node_cmp(const NodeHash lhs, const NodeHash rhs) const {
     const algebra::Node<R>* const lhs_ptr = get_node(lhs), *rhs_ptr = get_node(rhs);
@@ -255,26 +257,27 @@ int algebra::NodeStore<R>::node_cmp(const NodeHash lhs, const NodeHash rhs) cons
     if (lhs_ptr->type_ != rhs_ptr->type_) return lhs_ptr->type_ == NodeType::POL ? -1 : 1;
 
     if (lhs_ptr->type_ == NodeType::POL) {
-        if (lhs_ptr->stats.weight != rhs_ptr->stats.weight) return rhs_ptr->stats.weight - lhs_ptr->stats.weight;
+        if (lhs_ptr->stats.weight != rhs_ptr->stats.weight) return lhs_ptr->stats.weight - rhs_ptr->stats.weight;
         
         // They are both f(polynode), with the same weight, arbitrarily tiebreak
         return (lhs == rhs) ? 0 : (lhs < rhs ? -1 : 1);
     } 
     // They are both variables
-    return lhs_ptr->var_ - rhs_ptr->var_;
+    return -(lhs_ptr->var_ - rhs_ptr->var_);
 }
 
 /*
  * Elimination order on the nodes that are f(polynode) then variables
- * grevlex inside
+ * with grevlex inside the blocks
  *
- * Reversed in order to put the leading monomial in summands.front()
+ * Reversed in order to put the leading monomial in summands.front() (i.e. it looks like deglex)
  */ 
 
 template<class R>
 int algebra::NodeStore<R>::mononode_cmp(const MononodeHash lhs, const MononodeHash rhs) const {
     const Mononode<R>* const lhs_ptr = get_mononode(lhs), *rhs_ptr = get_mononode(rhs);
-    //std::cout << "Comparing: " << lhs << " " << lhs_ptr->to_string() << " " << rhs << " " << rhs_ptr->to_string() << "\n";
+    //std::cout << "Comparing: " << " " << lhs_ptr->to_string() << " " << rhs_ptr->to_string() << "\n";
+
     if (lhs_ptr->pol_degree_ != rhs_ptr->pol_degree_) 
         return -(lhs_ptr->pol_degree_ - rhs_ptr->pol_degree_); // Reverse
 
@@ -294,9 +297,9 @@ int algebra::NodeStore<R>::mononode_cmp(const MononodeHash lhs, const MononodeHa
         }
 
         if (lhs_it->first != rhs_it->first) 
-            return -node_cmp(lhs_it->first, rhs_it->first); // Reversed
+            return -node_cmp(lhs_it->first, rhs_it->first) * 2017; // Reversed
         if (lhs_it->second != rhs_it->second) 
-            return lhs_it->second < rhs_it->second ? -1 : 1; // Two reverses cancel out
+            return lhs_it->second < rhs_it->second ? -36 : 36; // Reversed?
     }
 
     // We might never hit the on_vars if statement, so we need to check here 

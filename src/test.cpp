@@ -146,6 +146,103 @@ void test_algebra() {
               << std::endl;
 }
 
+void test_cmp() {
+    clock_t tStart = clock();
+
+    algebra::NodeStore<R> ns;
+    const algebra::Node<R>* x = ns.node(1);
+    const algebra::Node<R>* y = ns.node(2);
+    const algebra::Node<R>* z = ns.node(3);
+
+    const algebra::Polynode<R>* px = ns.polynode({{ns.mononode({{x->hash, 1}})->hash, 1}});
+    const algebra::Polynode<R>* py = ns.polynode({{ns.mononode({{y->hash, 1}})->hash, 1}});
+
+    const algebra::Polynode<R>* fx = ns.polynode({{ns.mononode({{ns.node(px->hash)->hash, 1}})->hash, 1}});
+
+    std::vector<algebra::MononodeHash> grevlex_test{
+            // x1 x1
+            ns.mononode({{x->hash, 2}})->hash, 
+            // x1 x2
+            ns.mononode({{x->hash, 1}, {y->hash, 1}})->hash, 
+            // x2 x2
+            ns.mononode({{y->hash, 2}})->hash, 
+            // x1 x3
+            ns.mononode({{x->hash, 1}, {z->hash, 1}})->hash, 
+            // x2 x3
+            ns.mononode({{y->hash, 1}, {z->hash, 1}})->hash, 
+            // x3 x3
+            ns.mononode({{z->hash, 2}})->hash, 
+        };
+
+    std::vector<algebra::MononodeHash> cmp_test{
+            // f(f(f(x1)) x2 x3)
+            ns.mononode({{ns.node(ns.polynode({{ns.mononode({
+                    {ns.node(fx->hash)->hash, 1},
+                    {y->hash, 1},
+                    {z->hash, 1},
+                })->hash, 1}})->hash)->hash, 1}})->hash,
+            // f(f(x2) x2 x3)
+            ns.mononode({{ns.node(ns.polynode({{ns.mononode({
+                    {ns.node(py->hash)->hash, 1},
+                    {y->hash, 1},
+                    {z->hash, 1},
+                })->hash, 1}})->hash)->hash, 1}})->hash,
+
+            // f(f(0) f(x1) x2)
+            ns.mononode({{ns.node(ns.polynode({{ns.mononode({
+                    {ns.node(ns.zero_p()->hash)->hash, 1},
+                    {ns.node(px->hash)->hash, 1},
+                    {y->hash, 1},
+                })->hash, 1}})->hash)->hash, 1}})->hash,
+            // f(x1 + x2)
+            ns.mononode({{ns.node((*px + *py)->hash)->hash, 1}})->hash,
+            // f(x1)
+            ns.mononode({{ns.node(px->hash)->hash, 1}})->hash,
+            // f(f(0)) x1
+            ns.mononode({
+                    {ns.node(ns.polynode({{ns.mononode({
+                        {ns.node(ns.zero_p()->hash)->hash, 1},
+                    })->hash, 1}})->hash)->hash, 1},
+                    {x->hash, 1}
+                })->hash,
+            // x1 x1 x1 
+            ns.mononode({{x->hash, 3}})->hash,
+            // x1 x2 x3
+            ns.mononode({{x->hash, 1}, {y->hash, 1}, {z->hash, 1}})->hash,
+            // x1
+            ns.mononode({{x->hash, 1}})->hash,
+            // 1
+            ns.one_m()->hash,
+        };
+    uint64_t f1 = 1, f2 = 1;
+    for (size_t i = 2; i <= grevlex_test.size(); i++) { f1 *= i; }
+    for (size_t i = 2; i <= cmp_test.size(); i++) { f2 *= i; }
+
+    /*for (size_t i = 0; i < cmp_test.size(); i++) {
+        const algebra::Mononode<R>* m = ns.get_mononode(cmp_test[i]);
+        std::cout << m->to_string() << " ";
+        for (size_t j = 0; j < i; j++) {
+            std::cout << ns.mononode_cmp(cmp_test[i], cmp_test[j]) << " ";
+        }
+        std::cout << std::endl;
+    }*/
+    uint64_t idx = 1;
+    while (std::next_permutation(grevlex_test.begin(), grevlex_test.end(),
+            [&ns] (algebra::MononodeHash a, algebra::MononodeHash b) { return ns.mononode_cmp(a, b) < 0; })
+          ) { idx++; }
+    assert(idx == f1);
+
+    idx = 1;
+    while (std::next_permutation(cmp_test.begin(), cmp_test.end(),
+            [&ns] (algebra::MononodeHash a, algebra::MononodeHash b) { return ns.mononode_cmp(a, b) < 0; })
+          ) { idx++; }
+    assert(idx == f2);
+
+    std::cout << "cmp: " << std::fixed << std::setprecision(3)
+              << (double)(clock() - tStart) / CLOCKS_PER_SEC << "s"
+              << std::endl;
+}
+
 void test_input() {
     clock_t tStart = clock();
 
@@ -199,6 +296,7 @@ void test_input() {
 
 int main() {
     test_algebra();
+    test_cmp();
     test_input();
 }
 
