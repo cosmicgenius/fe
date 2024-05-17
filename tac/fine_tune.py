@@ -152,17 +152,18 @@ def ftune(config: FineTuneConfig, data_path, build_path, meta_path, models_path)
 
     def get_rewards(base_prob, tacs):
         proc = Popen([build_path, "--pretty=false", "--simp=2", "--simp_timeout=800", 
-                      f"--batch_size={config.batch_size}", "--threads=8"], 
+                      f"--batch_size={config.batch_size + 1}", "--threads=8"], 
                      encoding="utf-8", stdin=PIPE, stdout=PIPE, stderr=DEVNULL)
 
         try:
             stdout, _ = proc.communicate(''.join([base_prob] + tacs), timeout=30)
+
             blocks = blank_line_regex.split(stdout)[2::2] # first block is echoed hypotheses, odd blocks are simplification echoes
 
             base_reward = total_neg_reward(blocks[0], base_prob) # calculate the reward for doing nothing, then subtract this
                                                                  # from the other rewards to calculate the "difference"
 
-            return [total_neg_reward(b, t) - base_reward for b, t in zip(blocks, tacs)]
+            return [total_neg_reward(b, t) - base_reward for b, t in zip(blocks[1:], tacs)]
 
         except TimeoutExpired:
             # Really shouldn't happen, 30s is a lot of time
@@ -232,12 +233,14 @@ def ftune(config: FineTuneConfig, data_path, build_path, meta_path, models_path)
                 print("generated")
 
                 rewards = torch.tensor(get_rewards(base_prob, tacs)).to(device=config.device)
-                rewards = (rewards - rewards.mean()) / (rewards.std() + eps)
+                results = (rewards - rewards.mean()) / (rewards.std() + eps)
 
                 ex = int(torch.argmin(rewards).item())
                 print(f"Ex:\n{tacs[ex]}")
+                print(f"R={rewards[ex].item()}")
+                print(f"z={results[ex].item()}")
                                        
-                loss = (rewards * last_logits).sum()
+                loss = (results * last_logits).sum()
                 loss = loss / config.gradient_acc_steps # scale the loss to account for gradient accumulation
 
             x = get_batch(config.tactic)
