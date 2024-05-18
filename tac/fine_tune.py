@@ -67,7 +67,7 @@ def ftune(config: FineTuneConfig, data_path, build_path, meta_path, models_path)
         def encode(s):
             return [stoi[c] for c in s]
         def decode(l):
-            return ''.join(itos[i] for i in l)
+            return ''.join(itos[int(i)] for i in l)
 
     else: 
         raise ValueError(f"Unknown encoding {meta['args']['encoding']!r}")
@@ -182,6 +182,7 @@ def ftune(config: FineTuneConfig, data_path, build_path, meta_path, models_path)
 
     # training loop
     x = get_batch(config.tactic)
+    print(x[0])
     t0 = time.time()
     local_iter_num = 0 # number of iterations in the lifetime of this process
     raw_model = model
@@ -222,7 +223,7 @@ def ftune(config: FineTuneConfig, data_path, build_path, meta_path, models_path)
             with ctx:
                 idx = torch.clone(x)
                 idx, last_logits = model.forward_until_tok(idx, nl_tok)
-
+                
                 base_prob = '\n'.join(decode(x[0]).split('\n')) + '\ne\n' # remove last 
                 tacs = [
                     decode(t[:x.shape[1]])

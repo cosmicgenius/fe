@@ -27,9 +27,6 @@ train_tac_path = os.path.join(dirname, 'data', "train-tac.bin")
 val_tac_path = os.path.join(dirname, 'data', "val-tac.bin")
 meta_tac_path = os.path.join(dirname, 'data', "meta-tac.pkl")
 
-finetune_sub_path = os.path.join(dirname, 'data', 'finetune-sub.txt')
-finetune_add_path = os.path.join(dirname, 'data', 'finetune-add.txt')
-
 @dataclass
 class TokenizeConfig:
     encoding: str           = 'bpe' # 'bpe' or 'char'

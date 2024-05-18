@@ -10,7 +10,6 @@ from contextlib import nullcontext
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 import dataclasses
 
 from gpt import GPT
@@ -202,9 +201,6 @@ def train(config: TrainConfig, train_path, val_path, meta_path, models_path):
         for micro_step in range(config.gradient_acc_steps):
             with ctx:
                 logits, loss = model(X, Y)
-                probs = F.softmax(logits, dim=-1)
-                # sample from the distribution
-                idx_next = torch.multinomial(probs, num_samples=1)
                 loss = loss / config.gradient_acc_steps # scale the loss to account for gradient accumulation
             # immediately async prefetch next batch while model is doing the forward pass on the GPU
             X, Y = get_batch('train')
